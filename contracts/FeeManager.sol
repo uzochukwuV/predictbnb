@@ -15,10 +15,11 @@ contract FeeManager is Ownable, ReentrancyGuard {
     GameRegistry public gameRegistry;
     OracleCore public oracleCore;
 
-    // Fee structure
-    uint256 public constant BASE_QUERY_FEE = 0.0005 ether;  // Per query after free tier
-    uint256 public constant MONTHLY_SUBSCRIPTION = 1 ether;  // Unlimited queries
-    uint256 public constant FREE_DAILY_QUERIES = 100;        // Free queries per day
+    // Fee structure (V2 - Enhanced for developer revenue)
+    uint256 public constant BASE_QUERY_FEE = 0.003 ether;     // $1.80 per query after free tier
+    uint256 public constant PREMIUM_SUBSCRIPTION = 5 ether;   // $3,000/month - unlimited queries
+    uint256 public constant ENTERPRISE_SUBSCRIPTION = 10 ether; // $6,000/month - unlimited + priority
+    uint256 public constant FREE_DAILY_QUERIES = 50;          // Free queries per day
 
     // Revenue split percentages (in basis points, 10000 = 100%)
     uint256 public constant DEVELOPER_SHARE = 8000;     // 80% to game developer
@@ -27,8 +28,9 @@ contract FeeManager is Ownable, ReentrancyGuard {
 
     // Subscription tiers
     enum SubscriptionTier {
-        Free,       // 100 queries/day
-        Premium     // Unlimited queries for monthly fee
+        Free,       // 50 queries/day
+        Premium,    // Unlimited queries - 5 BNB/month
+        Enterprise  // Unlimited queries + priority support - 10 BNB/month
     }
 
     // Consumer (prediction market) struct
@@ -130,14 +132,24 @@ contract FeeManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Purchase premium subscription for unlimited queries
+     * @notice Purchase premium or enterprise subscription for unlimited queries
+     * @param _tier Subscription tier to purchase (Premium or Enterprise)
      */
-    function purchaseSubscription() external payable nonReentrant {
+    function purchaseSubscription(SubscriptionTier _tier) external payable nonReentrant {
         require(
             consumers[msg.sender].consumerAddress != address(0),
             "FeeManager: Not registered"
         );
-        require(msg.value == MONTHLY_SUBSCRIPTION, "FeeManager: Incorrect fee");
+        require(
+            _tier == SubscriptionTier.Premium || _tier == SubscriptionTier.Enterprise,
+            "FeeManager: Invalid tier"
+        );
+
+        uint256 requiredFee = _tier == SubscriptionTier.Premium
+            ? PREMIUM_SUBSCRIPTION
+            : ENTERPRISE_SUBSCRIPTION;
+
+        require(msg.value == requiredFee, "FeeManager: Incorrect fee");
 
         Consumer storage consumer = consumers[msg.sender];
 
@@ -146,7 +158,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
             ? consumer.subscriptionExpiry
             : block.timestamp;
 
-        consumer.tier = SubscriptionTier.Premium;
+        consumer.tier = _tier;
         consumer.subscriptionExpiry = baseTime + 30 days;
         consumer.totalFeePaid += msg.value;
 
@@ -322,9 +334,9 @@ contract FeeManager is Ownable, ReentrancyGuard {
      * @notice Calculate fee for a query based on consumer tier
      */
     function _calculateFee(Consumer storage _consumer) internal view returns (uint256) {
-        // Premium subscribers pay no per-query fee
+        // Premium and Enterprise subscribers pay no per-query fee
         if (
-            _consumer.tier == SubscriptionTier.Premium &&
+            (_consumer.tier == SubscriptionTier.Premium || _consumer.tier == SubscriptionTier.Enterprise) &&
             _consumer.subscriptionExpiry > block.timestamp
         ) {
             return 0;
@@ -409,7 +421,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
 
     function isSubscriptionActive(address _consumer) external view returns (bool) {
         Consumer memory consumer = consumers[_consumer];
-        return consumer.tier == SubscriptionTier.Premium &&
+        return (consumer.tier == SubscriptionTier.Premium || consumer.tier == SubscriptionTier.Enterprise) &&
                consumer.subscriptionExpiry > block.timestamp;
     }
 

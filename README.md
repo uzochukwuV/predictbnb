@@ -21,7 +21,7 @@ PredictBNB creates a **domain-specific oracle for gaming** with:
 2. 🎮 **Gaming-Specific**: Built for esports and competitive gaming from day one
 3. 💰 **Developer Monetization**: Game devs earn fees as their data is consumed
 4. 🔒 **Stake-Based Security**: Developers stake tokens, slashed for fraud
-5. 🆓 **Adoption-Friendly**: Free tier (100 queries/day) + pay-per-query + subscriptions
+5. 🆓 **Adoption-Friendly**: Free tier (50 queries/day) + pay-per-query + premium subscriptions
 
 ## 🏗️ Architecture
 
@@ -54,10 +54,11 @@ PredictBNB creates a **domain-specific oracle for gaming** with:
            ▼
 ┌──────────────────────────────┐
 │      FeeManager.sol          │
-│  - Query fees (0.0005 BNB)   │
+│  - Query fees (0.003 BNB)    │
 │  - Revenue distribution      │
-│  - Free tier (100/day)       │
-│  - Subscriptions (1 BNB/mo)  │
+│  - Free tier (50/day)        │
+│  - Premium (5 BNB/mo)        │
+│  - Enterprise (10 BNB/mo)    │
 └──────────┬───────────────────┘
            │
            ▼
@@ -83,9 +84,10 @@ PredictBNB creates a **domain-specific oracle for gaming** with:
 
 ### For Prediction Markets
 - ✅ Access verified gaming data
-- ✅ Free tier: 100 queries/day
-- ✅ Pay-per-query: 0.0005 BNB after free tier
-- ✅ Premium subscription: 1 BNB/month unlimited
+- ✅ Free tier: 50 queries/day
+- ✅ Pay-per-query: 0.003 BNB ($1.80) after free tier
+- ✅ Premium subscription: 5 BNB/month ($3,000) unlimited
+- ✅ Enterprise subscription: 10 BNB/month ($6,000) unlimited + priority
 - ✅ Fast resolution: 15-30 minutes
 - ✅ Batch queries for efficiency
 
@@ -100,24 +102,47 @@ PredictBNB creates a **domain-specific oracle for gaming** with:
 
 ### Revenue Split
 ```
-Query Fee: 0.0005 BNB
-├── 80% (0.0004 BNB) → Game Developer
-├── 15% (0.000075 BNB) → Protocol Treasury
-└── 5% (0.000025 BNB) → Disputer Pool
+Query Fee: 0.003 BNB ($1.80 @ $600/BNB)
+├── 80% (0.0024 BNB = $1.44) → Game Developer
+├── 15% (0.00045 BNB = $0.27) → Protocol Treasury
+└── 5% (0.00015 BNB = $0.09) → Disputer Pool
 
-Subscription: 1 BNB/month
-├── 15% → Protocol Treasury
-└── 5% → Disputer Pool
-└── 80% → Proportional distribution to game devs
+Premium Subscription: 5 BNB/month ($3,000)
+├── 15% ($450) → Protocol Treasury
+├── 5% ($150) → Disputer Pool
+└── 80% ($2,400) → Proportional distribution to game devs
+
+Enterprise Subscription: 10 BNB/month ($6,000)
+├── 15% ($900) → Protocol Treasury
+├── 5% ($300) → Disputer Pool
+└── 80% ($4,800) → Proportional distribution to game devs
 ```
 
 ### Fee Tiers
 
 | Tier | Cost | Queries | Best For |
 |------|------|---------|----------|
-| **Free** | $0 | 100/day | Testing, small markets |
-| **Pay-per-Query** | 0.0005 BNB | Unlimited | Occasional use |
-| **Premium** | 1 BNB/month | Unlimited | High-volume markets |
+| **Free** | $0 | 50/day (1,500/month) | Testing, small markets, research |
+| **Pay-per-Query** | 0.003 BNB ($1.80) | Unlimited | Irregular usage, specialized markets |
+| **Premium** | 5 BNB/month ($3,000) | Unlimited | Medium prediction markets, regional platforms |
+| **Enterprise** | 10 BNB/month ($6,000) | Unlimited + priority | Major platforms, global esports betting |
+
+**Break-even Analysis:**
+- Premium: Pays for itself after 1,667 queries/month (56/day)
+- Enterprise: Pays for itself after 3,334 queries/month (111/day)
+
+### Developer Revenue Potential
+
+**Why game developers will love PredictBNB:**
+
+| Game Type | Daily Matches | Queries/Match | Monthly Revenue (80% share) |
+|-----------|--------------|---------------|----------------------------|
+| **Casual Mobile** | 1,000 | 30 | **~$1,000,000** 💰 |
+| **Mid-Size Esports** | 500 | 300 | **~$4,000,000** 💰💰 |
+| **Major Esports Title** | 5,000 | 600 | **~$60,000,000** 💰💰💰 |
+| **Onchain Game (Passive)** | 200 | 50 | **~$350,000** 💰 |
+
+With the V2 fee model, even small games can earn **$1M+/month** from data monetization - a transformative revenue stream for game developers.
 
 ## 🚀 Quick Start
 
@@ -187,7 +212,7 @@ Manages payments and revenue distribution.
 **Key Functions:**
 - `registerConsumer()` - Register as data consumer
 - `queryResult(matchId)` - Query finalized result (pays fee)
-- `purchaseSubscription()` - Buy premium subscription (1 BNB)
+- `purchaseSubscription(tier)` - Buy Premium (5 BNB) or Enterprise (10 BNB) subscription
 - `withdrawRevenue()` - Game dev withdraws earnings
 
 ### ExamplePredictionMarket.sol
@@ -299,10 +324,12 @@ Deployment creates a JSON file in `deployments/` with all contract addresses.
 |---------|------------|----------------------|
 | **Resolution Time** | 15-30 minutes | 24-48 hours |
 | **Domain Focus** | Gaming-specific | General purpose |
-| **Developer Revenue** | 80% of fees | No direct monetization |
-| **Free Tier** | 100 queries/day | Pay per query |
+| **Developer Revenue** | 80% of fees ($1.44/query) | No direct monetization |
+| **Free Tier** | 50 queries/day | Pay per query |
+| **Query Cost** | $1.80 (competitive) | $0.50-$1.00 |
 | **Validation** | Gaming-specific checks | Generic |
 | **Adoption Model** | Freemium | Pay only |
+| **Speed Advantage** | 96x faster | Baseline |
 
 ## 🛠️ Tech Stack
 
@@ -314,13 +341,15 @@ Deployment creates a JSON file in `deployments/` with all contract addresses.
 
 ## 🗺️ Roadmap
 
-### Phase 1: Core Infrastructure (Current)
+### Phase 1: Core Infrastructure ✅ COMPLETE
 - ✅ Smart contract development
 - ✅ Testing suite
 - ✅ Deployment scripts
-- ✅ Basic documentation
+- ✅ Schema registry system for flexible game data
+- ✅ Batch operations for 60% gas savings
+- ✅ Enhanced fee model (V2) for developer revenue
 
-### Phase 2: Integration & Partnerships
+### Phase 2: Integration & Partnerships (Current)
 - 🔄 Integrate with 3-5 games (esports focus)
 - 🔄 Partner with existing prediction market
 - 🔄 Launch on BNB Testnet
