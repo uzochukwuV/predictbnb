@@ -1,3 +1,395 @@
-# predictbnb
-build to predict
-a project to build the future of gaming predition on bnb 
+# PredictBNB - Gaming Oracle Infrastructure
+
+> **A decentralized gaming oracle for on-chain prediction markets on BNB Chain**
+
+PredictBNB is a specialized oracle network for gaming results that enables game developers to monetize their data while providing prediction markets with fast, verified game outcomes.
+
+## 🎯 Problem Statement
+
+Current prediction market oracles (like UMA's Optimistic Oracle) face challenges:
+
+- **Slow resolution**: 24-48 hours for UMA OO vs our **15-30 minutes**
+- **Generic infrastructure**: Not optimized for gaming data
+- **No developer incentives**: Game devs don't benefit from being data providers
+- **High vulnerability**: Low-liquidity markets are easily manipulated
+
+## 💡 Our Solution
+
+PredictBNB creates a **domain-specific oracle for gaming** with:
+
+1. ⚡ **Fast Finality**: 15-30 minute dispute window (vs 24-48h for UMA)
+2. 🎮 **Gaming-Specific**: Built for esports and competitive gaming from day one
+3. 💰 **Developer Monetization**: Game devs earn fees as their data is consumed
+4. 🔒 **Stake-Based Security**: Developers stake tokens, slashed for fraud
+5. 🆓 **Adoption-Friendly**: Free tier (100 queries/day) + pay-per-query + subscriptions
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────┐
+│  Game Developer     │
+│  (Data Provider)    │
+│  - Stakes 0.1 BNB   │
+│  - Submits results  │
+│  - Earns 80% fees   │
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────────┐
+│     GameRegistry.sol         │
+│  - Register games            │
+│  - Schedule matches          │
+│  - Track reputation          │
+└──────────┬───────────────────┘
+           │
+           ▼
+┌──────────────────────────────┐
+│      OracleCore.sol          │
+│  - Submit results            │
+│  - 15-min dispute window     │
+│  - Stake/slash mechanism     │
+│  - Finalize results          │
+└──────────┬───────────────────┘
+           │
+           ▼
+┌──────────────────────────────┐
+│      FeeManager.sol          │
+│  - Query fees (0.0005 BNB)   │
+│  - Revenue distribution      │
+│  - Free tier (100/day)       │
+│  - Subscriptions (1 BNB/mo)  │
+└──────────┬───────────────────┘
+           │
+           ▼
+┌──────────────────────────────┐
+│   Prediction Markets         │
+│  (ExamplePredictionMarket)   │
+│  - Create markets            │
+│  - Accept bets               │
+│  - Resolve with oracle       │
+│  - Distribute winnings       │
+└──────────────────────────────┘
+```
+
+## 🔑 Key Features
+
+### For Game Developers
+- ✅ Register games with 0.1 BNB stake
+- ✅ Schedule matches with metadata
+- ✅ Submit results from verified endpoints
+- ✅ Earn 80% of query fees
+- ✅ Build reputation score (0-1000)
+- ✅ Withdraw earnings anytime
+
+### For Prediction Markets
+- ✅ Access verified gaming data
+- ✅ Free tier: 100 queries/day
+- ✅ Pay-per-query: 0.0005 BNB after free tier
+- ✅ Premium subscription: 1 BNB/month unlimited
+- ✅ Fast resolution: 15-30 minutes
+- ✅ Batch queries for efficiency
+
+### For Disputers
+- ✅ Challenge suspicious results
+- ✅ Stake 0.2 BNB to dispute
+- ✅ Earn 150% back if dispute succeeds
+- ✅ Automated validation checks
+- ✅ Protect market integrity
+
+## 📊 Token Economics
+
+### Revenue Split
+```
+Query Fee: 0.0005 BNB
+├── 80% (0.0004 BNB) → Game Developer
+├── 15% (0.000075 BNB) → Protocol Treasury
+└── 5% (0.000025 BNB) → Disputer Pool
+
+Subscription: 1 BNB/month
+├── 15% → Protocol Treasury
+└── 5% → Disputer Pool
+└── 80% → Proportional distribution to game devs
+```
+
+### Fee Tiers
+
+| Tier | Cost | Queries | Best For |
+|------|------|---------|----------|
+| **Free** | $0 | 100/day | Testing, small markets |
+| **Pay-per-Query** | 0.0005 BNB | Unlimited | Occasional use |
+| **Premium** | 1 BNB/month | Unlimited | High-volume markets |
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/uzochukwuV/predictbnb.git
+cd predictbnb
+
+# Install dependencies
+npm install
+
+# Copy environment file
+cp .env.example .env
+
+# Add your private key to .env
+```
+
+### Compile Contracts
+
+```bash
+npm run compile
+```
+
+### Run Tests
+
+```bash
+npm test
+```
+
+### Deploy to BNB Testnet
+
+```bash
+# Configure .env with your private key and BSCScan API key
+npm run deploy:testnet
+```
+
+### Run Demo
+
+```bash
+npm run demo
+```
+
+## 📝 Smart Contracts
+
+### GameRegistry.sol
+Manages game registration and match scheduling.
+
+**Key Functions:**
+- `registerGame(gameId, name, gameType)` - Register a new game (0.1 BNB stake)
+- `scheduleMatch(gameId, matchId, time, metadata)` - Schedule a match
+- `deactivateGame(gameId)` - Deactivate and withdraw stake (7 day cooldown)
+
+### OracleCore.sol
+Handles result submission, disputes, and finalization.
+
+**Key Functions:**
+- `submitResult(matchId, resultData)` - Submit game result
+- `disputeResult(matchId, reason)` - Challenge a result (0.2 BNB stake)
+- `finalizeResult(matchId)` - Finalize after dispute window
+- `resolveDispute(matchId, valid)` - Owner resolves dispute
+
+### FeeManager.sol
+Manages payments and revenue distribution.
+
+**Key Functions:**
+- `registerConsumer()` - Register as data consumer
+- `queryResult(matchId)` - Query finalized result (pays fee)
+- `purchaseSubscription()` - Buy premium subscription (1 BNB)
+- `withdrawRevenue()` - Game dev withdraws earnings
+
+### ExamplePredictionMarket.sol
+Demo prediction market contract.
+
+**Key Functions:**
+- `createMarket(matchId, description)` - Create betting market
+- `placeBet(marketId, outcome)` - Place bet on outcome
+- `resolveMarket(marketId)` - Resolve with oracle data
+- `claimWinnings(marketId)` - Claim winnings
+
+## 🎮 Integration Guide
+
+### For Game Developers
+
+```solidity
+// 1. Register your game
+await gameRegistry.registerGame(
+  "your-game-id",
+  "Your Game Name",
+  GameType.MOBA, // or FPS, Sports, etc.
+  { value: ethers.parseEther("0.1") }
+);
+
+// 2. Schedule matches
+const matchId = await gameRegistry.scheduleMatch(
+  "your-game-id",
+  "match-123",
+  futureTimestamp,
+  JSON.stringify({ team1: "TSM", team2: "C9" })
+);
+
+// 3. Submit results after match
+await oracleCore.submitResult(
+  matchId,
+  JSON.stringify({ winner: "TSM", score: "2-1" })
+);
+
+// 4. Withdraw earnings
+await feeManager.withdrawRevenue();
+```
+
+### For Prediction Markets
+
+```solidity
+// 1. Register as consumer
+await feeManager.registerConsumer();
+
+// 2. Query results (free tier or paid)
+const [resultData, resultHash, isFinalized] = await feeManager.queryResult(
+  matchId,
+  { value: queryFee }
+);
+
+// 3. Use result data to resolve markets
+const result = JSON.parse(resultData);
+// Resolve betting market based on result
+```
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+
+```bash
+# Run all tests
+npm test
+
+# Run with gas reporting
+npm run test:verbose
+
+# Run specific test file
+npx hardhat test test/GameRegistry.test.js
+```
+
+Test coverage:
+- ✅ GameRegistry: Registration, scheduling, stake management
+- ✅ OracleCore: Result submission, disputes, finalization
+- ✅ FeeManager: Query fees, subscriptions, revenue distribution
+- ✅ Integration: Complete end-to-end flows
+
+## 🌐 Deployment
+
+### BNB Testnet
+
+```bash
+npm run deploy:testnet
+```
+
+### BNB Mainnet
+
+```bash
+npm run deploy:mainnet
+```
+
+Deployment creates a JSON file in `deployments/` with all contract addresses.
+
+## 🔐 Security Features
+
+1. **Stake-Based Security**: Developers stake 0.1 BNB, slashed for fraud
+2. **Reputation System**: Track developer reliability (0-1000 score)
+3. **Fast Disputes**: 15-min window for challenges
+4. **Automated Validation**: Check timing, authorization, data integrity
+5. **ReentrancyGuard**: Protect all financial functions
+6. **Ownable**: Admin functions for emergency situations
+
+## 📈 Advantages Over UMA OO
+
+| Feature | PredictBNB | UMA Optimistic Oracle |
+|---------|------------|----------------------|
+| **Resolution Time** | 15-30 minutes | 24-48 hours |
+| **Domain Focus** | Gaming-specific | General purpose |
+| **Developer Revenue** | 80% of fees | No direct monetization |
+| **Free Tier** | 100 queries/day | Pay per query |
+| **Validation** | Gaming-specific checks | Generic |
+| **Adoption Model** | Freemium | Pay only |
+
+## 🛠️ Tech Stack
+
+- **Smart Contracts**: Solidity 0.8.20
+- **Development**: Hardhat
+- **Testing**: Chai, Hardhat Network Helpers
+- **Network**: BNB Chain (BSC Testnet & Mainnet)
+- **Security**: OpenZeppelin Contracts
+
+## 🗺️ Roadmap
+
+### Phase 1: Core Infrastructure (Current)
+- ✅ Smart contract development
+- ✅ Testing suite
+- ✅ Deployment scripts
+- ✅ Basic documentation
+
+### Phase 2: Integration & Partnerships
+- 🔄 Integrate with 3-5 games (esports focus)
+- 🔄 Partner with existing prediction market
+- 🔄 Launch on BNB Testnet
+- 🔄 Developer dashboard UI
+
+### Phase 3: Production Launch
+- ⏳ Security audit
+- ⏳ Mainnet deployment
+- ⏳ Marketing & developer onboarding
+- ⏳ Analytics dashboard
+
+### Phase 4: Advanced Features
+- ⏳ Automated dispute bots
+- ⏳ Cross-chain expansion
+- ⏳ AI-assisted validation
+- ⏳ Governance token
+
+## 🎨 For YZi Labs Hackathon Judges
+
+### How We Address YZi Labs Priorities:
+
+1. **Domain-Specific Oracles** ✅
+   - Gaming is underserved by generic oracles
+   - Fast resolution critical for gaming markets
+   - Built-in validation for gaming data
+
+2. **Protocols/Infrastructure** ✅
+   - We're infrastructure, not just another market UI
+   - Composable: Multiple markets can use our data
+   - Developer monetization creates supply-side incentive
+
+3. **Speed Advantage** ✅
+   - 15-30 min vs UMA's 24-48 hours
+   - Critical for live gaming events
+   - Better UX for bettors
+
+4. **Incentive Innovation** ✅
+   - Game devs earn ongoing revenue
+   - Disputers earn rewards for honesty
+   - Free tier drives adoption
+
+5. **BNB Chain Fit** ✅
+   - Low gas fees for micro-betting
+   - Fast finality for quick resolution
+   - Growing gaming ecosystem
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details
+
+## 🤝 Contributing
+
+Contributions welcome! Please read our contributing guidelines and submit PRs.
+
+## 📞 Contact
+
+- **Project Lead**: [Your Name]
+- **GitHub**: [@uzochukwuV/predictbnb](https://github.com/uzochukwuV/predictbnb)
+- **Twitter**: [@YourTwitter]
+
+## 🙏 Acknowledgments
+
+- YZi Labs for the hackathon opportunity
+- BNB Chain for infrastructure
+- OpenZeppelin for secure contract templates
+- The prediction markets community
+
+---
+
+**Built with ❤️ for YZi Labs Hackathon**
+
+*Making gaming prediction markets faster, fairer, and more profitable for everyone.*
