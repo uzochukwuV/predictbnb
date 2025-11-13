@@ -592,6 +592,229 @@ contract TournamentOracle {
 
 ---
 
+## 💰 Batch Operations (Cost Optimization)
+
+### Why Batch?
+
+Submitting match results individually can be expensive when you have many matches. **Batch operations save ~40-60% in gas costs**!
+
+**Perfect for:**
+- 🏆 Tournaments (submit all bracket results at once)
+- 📅 Daily uploads (accumulate results, submit once per day)
+- 📜 Historical data (migrate past matches efficiently)
+- 🎯 High-volume games (reduce per-match cost)
+
+### Batch Submit Results
+
+```solidity
+/**
+ * @notice Batch submit up to 50 results in one transaction
+ * @param matchIds Array of match IDs
+ * @param gameContract Your game contract address (same for all)
+ * @param participants Array of participant arrays
+ * @param scores Array of score arrays
+ * @param winnerIndices Array of winner indices
+ * @param durations Array of durations
+ * @param schemaId Schema ID (same for all results)
+ * @param customDataArray Array of custom data
+ * @return successCount Number of successfully submitted results
+ */
+function batchSubmitResultsV2(
+    bytes32[] calldata matchIds,
+    address gameContract,
+    address[][] calldata participants,
+    uint256[][] calldata scores,
+    uint8[] calldata winnerIndices,
+    uint256[] calldata durations,
+    bytes32 schemaId,
+    bytes[] calldata customDataArray
+) external returns (uint256 successCount);
+```
+
+### Example: Tournament Results
+
+```solidity
+contract TournamentOrganizer {
+    OracleCoreV2 public oracle;
+    SchemaTemplates public templates;
+
+    function submitTournamentResults(
+        bytes32[] calldata tournamentMatchIds,
+        TournamentResult[] calldata results
+    ) external {
+        // Prepare arrays
+        address[][] memory participants = new address[][](results.length);
+        uint256[][] memory scores = new uint256[][](results.length);
+        uint8[] memory winnerIndices = new uint8[](results.length);
+        uint256[] memory durations = new uint256[](results.length);
+        bytes[] memory customDataArray = new bytes[](results.length);
+
+        // Populate arrays from tournament results
+        for (uint i = 0; i < results.length; i++) {
+            participants[i] = results[i].participants;
+            scores[i] = results[i].scores;
+            winnerIndices[i] = results[i].winnerIndex;
+            durations[i] = results[i].duration;
+
+            // Encode FPS data for each match
+            customDataArray[i] = templates.encodeFPSData(
+                results[i].kills,
+                results[i].deaths,
+                results[i].assists,
+                results[i].headshots,
+                results[i].damage,
+                results[i].mvp
+            );
+        }
+
+        // Submit all results in ONE transaction
+        uint256 successCount = oracle.batchSubmitResultsV2(
+            tournamentMatchIds,
+            address(this),
+            participants,
+            scores,
+            winnerIndices,
+            durations,
+            templates.SCHEMA_FPS_PVP(),
+            customDataArray
+        );
+
+        emit TournamentResultsSubmitted(successCount);
+    }
+}
+```
+
+### Batch Finalize Results
+
+After the 15-minute dispute window, finalize all results at once:
+
+```solidity
+/**
+ * @notice Batch finalize up to 100 results in one transaction
+ * @param matchIds Array of match IDs to finalize
+ * @return successCount Number of successfully finalized results
+ */
+function batchFinalizeResults(bytes32[] calldata matchIds)
+    external
+    returns (uint256 successCount);
+```
+
+### Example: Daily Finalization
+
+```solidity
+contract DailyBatchFinalizer {
+    OracleCoreV2 public oracle;
+    bytes32[] public pendingResults;
+
+    // Collect match IDs throughout the day
+    function trackResult(bytes32 matchId) external {
+        pendingResults.push(matchId);
+    }
+
+    // Finalize all at once (after dispute windows passed)
+    function finalizeDailyBatch() external {
+        require(pendingResults.length > 0, "No pending results");
+
+        uint256 finalized = oracle.batchFinalizeResults(pendingResults);
+
+        // Clear processed results
+        delete pendingResults;
+
+        emit DailyBatchFinalized(finalized);
+    }
+}
+```
+
+### Gas Comparison
+
+| Operation | Individual (20 results) | Batch (20 results) | Savings |
+|-----------|-------------------------|-------------------|---------|
+| **Submit Results** | ~3,000,000 gas | ~1,400,000 gas | **~53%** |
+| **Finalize Results** | ~1,600,000 gas | ~800,000 gas | **~50%** |
+| **Total Cost** | ~4,600,000 gas | ~2,200,000 gas | **~52%** |
+
+**At 5 gwei gas price:**
+- Individual: ~0.023 BNB
+- Batch: ~0.011 BNB
+- **Saved: ~0.012 BNB per 20 matches**
+
+### Batch Limits
+
+- **Submit**: Max 50 results per transaction
+- **Finalize**: Max 100 results per transaction
+- Arrays must all be same length
+- Schema ID must be same for all results
+
+### Error Handling
+
+Batch operations are **fault-tolerant**:
+
+```solidity
+// Submits 20 results, but 3 have issues (already submitted, invalid data, etc.)
+uint256 success = oracle.batchSubmitResultsV2(...); // Returns 17
+
+// Event emitted: BatchResultsSubmitted(submitter, 17, 20)
+// 17 succeeded, 3 skipped, no revert!
+```
+
+**Invalid results are skipped**, not reverted:
+- ✅ Already submitted
+- ✅ Invalid participants/scores
+- ✅ Failed schema validation
+- ✅ Non-existent match
+
+This ensures **maximum success rate** even with partial data issues.
+
+### Best Practices
+
+1. **Tournament Organizers**: Submit all bracket results together
+   ```javascript
+   // After tournament completes
+   await oracle.batchSubmitResultsV2(allMatchIds, ...)
+   ```
+
+2. **Daily Batch**: Accumulate results during the day
+   ```javascript
+   // Submit once per day at 00:00 UTC
+   cron.schedule('0 0 * * *', async () => {
+     await oracle.batchSubmitResultsV2(todaysMatches, ...)
+   })
+   ```
+
+3. **Historical Migration**: Upload past matches efficiently
+   ```javascript
+   // Migrate 1000 past matches in batches of 50
+   for (let i = 0; i < 1000; i += 50) {
+     const batch = pastMatches.slice(i, i + 50)
+     await oracle.batchSubmitResultsV2(batch, ...)
+   }
+   ```
+
+4. **Auto-Finalization**: Run batch finalizer after dispute window
+   ```javascript
+   // Every 30 minutes, finalize eligible results
+   cron.schedule('*/30 * * * *', async () => {
+     const eligible = await getEligibleForFinalization()
+     if (eligible.length > 0) {
+       await oracle.batchFinalizeResults(eligible)
+     }
+   })
+   ```
+
+### Try It Yourself
+
+Run the batch example script:
+
+```bash
+npm run demo:batch
+```
+
+Or see the code:
+- `scripts/batchSubmitExample.js` - Complete tournament example
+- `test/BatchOperations.test.js` - Comprehensive tests
+
+---
+
 ## FAQ
 
 **Q: Can I update my schema after registering?**
@@ -616,7 +839,16 @@ A: Yes, call `schemaRegistry.getAllSchemas()` or `getTemplateSchemas()`.
 A: They query your game contract address in the schema registry.
 
 **Q: What's the gas cost?**
-A: Schema registration: ~200k gas. Result submission: ~150k gas.
+A: Schema registration: ~200k gas. Individual result: ~150k gas. Batch result: ~70k gas per result.
+
+**Q: Should I use batch submission?**
+A: Yes! If you have 5+ results to submit, batch saves ~40-60% gas. Perfect for tournaments and daily uploads.
+
+**Q: What's the maximum batch size?**
+A: Submit: 50 results. Finalize: 100 results. Split larger batches across multiple transactions.
+
+**Q: What happens if some results in a batch are invalid?**
+A: Invalid results are skipped (not reverted). You get back the count of successful submissions.
 
 ---
 

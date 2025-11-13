@@ -15,6 +15,8 @@
     "deploy:v2:testnet": "hardhat run scripts/deployV2.js --network bscTestnet",
     "deploy:v2:mainnet": "hardhat run scripts/deployV2.js --network bscMainnet",
     "demo": "hardhat run scripts/demo.js --network hardhat",
+    "demo:batch": "hardhat run scripts/batchSubmitExample.js --network hardhat",
+    "test:batch": "hardhat test test/BatchOperations.test.js",
     "node": "hardhat node",
     "clean": "hardhat clean"
   },

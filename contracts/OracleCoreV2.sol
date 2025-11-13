@@ -299,6 +299,159 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Batch submit multiple results (saves gas for tournaments/bulk uploads)
+     * @param _matchIds Array of match IDs
+     * @param _gameContract Game contract address (same for all)
+     * @param _participants Array of participant arrays
+     * @param _scores Array of score arrays
+     * @param _winnerIndices Array of winner indices
+     * @param _durations Array of durations
+     * @param _schemaId Schema ID (same for all results)
+     * @param _customDataArray Array of custom data
+     * @return successCount Number of successfully submitted results
+     */
+    function batchSubmitResultsV2(
+        bytes32[] calldata _matchIds,
+        address _gameContract,
+        address[][] calldata _participants,
+        uint256[][] calldata _scores,
+        uint8[] calldata _winnerIndices,
+        uint256[] calldata _durations,
+        bytes32 _schemaId,
+        bytes[] calldata _customDataArray
+    ) external nonReentrant returns (uint256 successCount) {
+        require(_matchIds.length > 0, "OracleCoreV2: Empty batch");
+        require(_matchIds.length <= 50, "OracleCoreV2: Batch too large");
+        require(
+            _matchIds.length == _participants.length &&
+            _matchIds.length == _scores.length &&
+            _matchIds.length == _winnerIndices.length &&
+            _matchIds.length == _durations.length &&
+            _matchIds.length == _customDataArray.length,
+            "OracleCoreV2: Array length mismatch"
+        );
+
+        // Cache game details (same for all results in batch)
+        GameRegistry.Match memory firstMatch = gameRegistry.getMatch(_matchIds[0]);
+        GameRegistry.Game memory game = gameRegistry.getGame(firstMatch.gameId);
+        require(game.developer == msg.sender, "OracleCoreV2: Only game developer can submit");
+        require(game.isActive, "OracleCoreV2: Game not active");
+
+        // Pre-validate schema once for all results
+        bool schemaValid = true;
+        if (_schemaId != bytes32(0)) {
+            require(schemaRegistry.isSchemaActive(_schemaId), "OracleCoreV2: Schema not active");
+        }
+
+        uint256 disputeDeadline = block.timestamp + DISPUTE_WINDOW;
+        successCount = 0;
+
+        for (uint256 i = 0; i < _matchIds.length; i++) {
+            // Skip if result already exists
+            if (results[_matchIds[i]].submittedAt > 0) {
+                continue;
+            }
+
+            // Get match data
+            GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchIds[i]);
+            if (matchData.scheduledTime == 0) {
+                continue; // Skip non-existent matches
+            }
+
+            // Basic validation
+            if (
+                _participants[i].length == 0 ||
+                _participants[i].length != _scores[i].length ||
+                (_winnerIndices[i] >= _participants[i].length && _winnerIndices[i] != 255)
+            ) {
+                continue; // Skip invalid data
+            }
+
+            // Validate schema data if provided
+            if (_schemaId != bytes32(0)) {
+                schemaValid = _validateSchema(_schemaId, _customDataArray[i], _gameContract);
+                if (!schemaValid) {
+                    continue; // Skip if schema validation fails
+                }
+            }
+
+            // Compute result hash
+            bytes32 resultHash = keccak256(
+                abi.encodePacked(
+                    _matchIds[i],
+                    _gameContract,
+                    _participants[i],
+                    _scores[i],
+                    _winnerIndices[i],
+                    _schemaId,
+                    _customDataArray[i],
+                    block.timestamp
+                )
+            );
+
+            // Store validation
+            validations[_matchIds[i]] = ValidationChecks({
+                timingValid: block.timestamp >= matchData.scheduledTime,
+                authorizedSubmitter: true,
+                dataIntegrity: true,
+                schemaValid: schemaValid,
+                participantsValid: _participants[i].length > 0
+            });
+
+            // Store result
+            GameResult storage result = results[_matchIds[i]];
+            result.matchId = _matchIds[i];
+            result.gameContract = _gameContract;
+            result.timestamp = block.timestamp;
+            result.duration = _durations[i];
+            result.status = GameStatus.COMPLETED;
+            result.participants = _participants[i];
+            result.scores = _scores[i];
+            result.winnerIndex = _winnerIndices[i];
+            result.schemaId = _schemaId;
+            result.customData = _customDataArray[i];
+            result.resultHash = resultHash;
+            result.submitter = msg.sender;
+            result.submittedAt = block.timestamp;
+            result.disputeDeadline = disputeDeadline;
+            result.isFinalized = false;
+            result.isDisputed = false;
+
+            allResults.push(_matchIds[i]);
+
+            // Update match status
+            gameRegistry.updateMatchStatus(_matchIds[i], GameRegistry.MatchStatus.Completed);
+
+            // Emit event
+            emit ResultSubmittedV2(
+                _matchIds[i],
+                _gameContract,
+                msg.sender,
+                resultHash,
+                _schemaId,
+                disputeDeadline
+            );
+
+            if (_schemaId != bytes32(0)) {
+                emit SchemaDataValidated(_matchIds[i], _schemaId, schemaValid);
+            }
+
+            successCount++;
+        }
+
+        emit BatchResultsSubmitted(msg.sender, successCount, _matchIds.length);
+
+        return successCount;
+    }
+
+    // Events for batch operations
+    event BatchResultsSubmitted(
+        address indexed submitter,
+        uint256 successCount,
+        uint256 totalAttempted
+    );
+
+    /**
      * @notice Dispute a submitted result
      * @param _matchId The match result to dispute
      * @param _reason Explanation for the dispute
@@ -404,6 +557,65 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
 
         emit ResultFinalized(_matchId, result.resultHash, block.timestamp);
     }
+
+    /**
+     * @notice Batch finalize multiple results (saves gas)
+     * @param _matchIds Array of match IDs to finalize
+     * @return successCount Number of successfully finalized results
+     */
+    function batchFinalizeResults(bytes32[] calldata _matchIds)
+        external
+        nonReentrant
+        returns (uint256 successCount)
+    {
+        require(_matchIds.length > 0, "OracleCoreV2: Empty batch");
+        require(_matchIds.length <= 100, "OracleCoreV2: Batch too large");
+
+        successCount = 0;
+
+        for (uint256 i = 0; i < _matchIds.length; i++) {
+            GameResult storage result = results[_matchIds[i]];
+
+            // Skip if doesn't exist, already finalized, or disputed
+            if (
+                result.submittedAt == 0 ||
+                result.isFinalized ||
+                result.isDisputed ||
+                block.timestamp < result.disputeDeadline
+            ) {
+                continue;
+            }
+
+            // Finalize
+            result.isFinalized = true;
+            result.status = GameStatus.COMPLETED;
+
+            gameRegistry.updateMatchStatus(_matchIds[i], GameRegistry.MatchStatus.Finalized);
+
+            // Update reputation (small increase)
+            GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchIds[i]);
+            GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
+
+            uint256 newReputation = game.reputationScore < 995
+                ? game.reputationScore + 5
+                : 1000;
+            gameRegistry.updateReputation(matchData.gameId, newReputation);
+
+            emit ResultFinalized(_matchIds[i], result.resultHash, block.timestamp);
+
+            successCount++;
+        }
+
+        emit BatchResultsFinalized(msg.sender, successCount, _matchIds.length);
+
+        return successCount;
+    }
+
+    event BatchResultsFinalized(
+        address indexed caller,
+        uint256 successCount,
+        uint256 totalAttempted
+    );
 
     /**
      * @notice Withdraw accumulated rewards
