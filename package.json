@@ -1,0 +1,36 @@
+{
+  "name": "predictbnb",
+  "version": "1.0.0",
+  "description": "build to predict a project to build the future of gaming predition on bnb",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "test:verbose": "hardhat test --verbose",
+    "test:schemas": "hardhat test test/SchemaRegistry.test.js test/OracleCoreV2.test.js",
+    "compile": "hardhat compile",
+    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network bscTestnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network bscMainnet",
+    "deploy:v2:local": "hardhat run scripts/deployV2.js --network hardhat",
+    "deploy:v2:testnet": "hardhat run scripts/deployV2.js --network bscTestnet",
+    "deploy:v2:mainnet": "hardhat run scripts/deployV2.js --network bscMainnet",
+    "demo": "hardhat run scripts/demo.js --network hardhat",
+    "demo:batch": "hardhat run scripts/batchSubmitExample.js --network hardhat",
+    "test:batch": "hardhat test test/BatchOperations.test.js",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:28795/git/uzochukwuV/predictbnb"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^17.2.3",
+    "hardhat": "^2.27.0"
+  }
+}
