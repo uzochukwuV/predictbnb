@@ -373,4 +373,160 @@ describe("OracleCoreV2 with Schema Support", function () {
       expect(validation.participantsValid).to.be.true;
     });
   });
+
+  describe("Emergency Pause Mechanism", function () {
+    it("Should allow owner to pause all operations", async function () {
+      // Owner should be able to pause
+      await expect(oracleCore.connect(owner).emergencyPause())
+        .to.not.be.reverted;
+    });
+
+    it("Should prevent non-owner from pausing", async function () {
+      await expect(
+        oracleCore.connect(gameDev).emergencyPause()
+      ).to.be.revertedWithCustomError(oracleCore, "OwnableUnauthorizedAccount");
+    });
+
+    it("Should block result submission when paused", async function () {
+      // Pause the contract
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Try to submit result - should fail
+      const resultData = '{"winner": "TeamA", "score": "16-14"}';
+      await expect(
+        oracleCore.connect(gameDev).submitResult(matchId, resultData)
+      ).to.be.revertedWithCustomError(oracleCore, "EnforcedPause");
+    });
+
+    it("Should block V2 result submission when paused", async function () {
+      await oracleCore.connect(owner).emergencyPause();
+
+      const fpsSchemaId = await schemaTemplates.SCHEMA_FPS_PVP();
+      const participants = [gameDev.address];
+      const scores = [1];
+      const customData = await schemaTemplates.encodeFPSData(10, 5, 3, 4, 2000, 0);
+
+      await expect(
+        oracleCore.connect(gameDev).submitResultV2(
+          matchId,
+          gameDev.address,
+          participants,
+          scores,
+          0,
+          1000,
+          fpsSchemaId,
+          customData
+        )
+      ).to.be.revertedWithCustomError(oracleCore, "EnforcedPause");
+    });
+
+    it("Should block batch submissions when paused", async function () {
+      await oracleCore.connect(owner).emergencyPause();
+
+      const fpsSchemaId = await schemaTemplates.SCHEMA_FPS_PVP();
+      const participants = [gameDev.address];
+      const scores = [1];
+      const customData = await schemaTemplates.encodeFPSData(10, 5, 3, 4, 2000, 0);
+
+      await expect(
+        oracleCore.connect(gameDev).batchSubmitResultsV2(
+          [matchId],
+          [gameDev.address],
+          [participants],
+          [scores],
+          [0],
+          [1000],
+          [fpsSchemaId],
+          [customData]
+        )
+      ).to.be.revertedWithCustomError(oracleCore, "EnforcedPause");
+    });
+
+    it("Should block disputes when paused", async function () {
+      // First submit a result
+      const resultData = '{"winner": "TeamA", "score": "16-14"}';
+      await oracleCore.connect(gameDev).submitResult(matchId, resultData);
+
+      // Pause the contract
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Try to dispute - should fail
+      const DISPUTE_STAKE = ethers.parseEther("0.05");
+      await expect(
+        oracleCore.connect(consumer).disputeResult(
+          matchId,
+          "Incorrect result",
+          { value: DISPUTE_STAKE }
+        )
+      ).to.be.revertedWithCustomError(oracleCore, "EnforcedPause");
+    });
+
+    it("Should block finalization when paused", async function () {
+      // Submit result and wait for dispute window
+      const resultData = '{"winner": "TeamA", "score": "16-14"}';
+      await oracleCore.connect(gameDev).submitResult(matchId, resultData);
+      await time.increase(16 * 60);
+
+      // Pause the contract
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Try to finalize - should fail
+      await expect(
+        oracleCore.finalizeResult(matchId)
+      ).to.be.revertedWithCustomError(oracleCore, "EnforcedPause");
+    });
+
+    it("Should block batch finalization when paused", async function () {
+      // Submit result and wait
+      const resultData = '{"winner": "TeamA", "score": "16-14"}';
+      await oracleCore.connect(gameDev).submitResult(matchId, resultData);
+      await time.increase(16 * 60);
+
+      // Pause
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Try to batch finalize - should fail
+      await expect(
+        oracleCore.batchFinalizeResults([matchId])
+      ).to.be.revertedWithCustomError(oracleCore, "EnforcedPause");
+    });
+
+    it("Should allow owner to unpause and resume operations", async function () {
+      // Pause
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Unpause
+      await expect(oracleCore.connect(owner).unpause())
+        .to.not.be.reverted;
+
+      // Submit should work again
+      const resultData = '{"winner": "TeamA", "score": "16-14"}';
+      await expect(
+        oracleCore.connect(gameDev).submitResult(matchId, resultData)
+      ).to.emit(oracleCore, "ResultSubmittedV2");
+    });
+
+    it("Should prevent non-owner from unpausing", async function () {
+      // Pause first
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Non-owner tries to unpause
+      await expect(
+        oracleCore.connect(gameDev).unpause()
+      ).to.be.revertedWithCustomError(oracleCore, "OwnableUnauthorizedAccount");
+    });
+
+    it("Should allow reading data when paused", async function () {
+      // Submit result first
+      const resultData = '{"winner": "TeamA", "score": "16-14"}';
+      await oracleCore.connect(gameDev).submitResult(matchId, resultData);
+
+      // Pause
+      await oracleCore.connect(owner).emergencyPause();
+
+      // Reading should still work (view functions not affected by pause)
+      const [data, hash, isFinalized] = await oracleCore.getResult(matchId);
+      expect(data).to.equal(resultData);
+    });
+  });
 });
