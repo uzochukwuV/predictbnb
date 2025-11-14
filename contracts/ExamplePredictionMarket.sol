@@ -227,9 +227,12 @@ contract ExamplePredictionMarket is ReentrancyGuard {
         uint256 payoutPool = market.totalStaked - protocolFee;
         uint256 payout = (userStake * payoutPool) / totalWinningStake;
 
+        // SECURITY: State changes BEFORE external call (checks-effects-interactions pattern)
         market.hasClaimed[msg.sender] = true;
 
-        payable(msg.sender).transfer(payout);
+        // Use call instead of transfer for better gas forwarding
+        (bool success, ) = payable(msg.sender).call{value: payout}("");
+        require(success, "ExamplePredictionMarket: Transfer failed");
 
         emit WinningsClaimed(_marketId, msg.sender, payout);
     }

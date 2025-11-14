@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./GameRegistry.sol";
 import "./GameSchemaRegistry.sol";
 
@@ -10,8 +11,9 @@ import "./GameSchemaRegistry.sol";
  * @title OracleCoreV2
  * @notice Enhanced oracle with schema support for rich game data
  * @dev Supports both simple results (backward compatible) and schema-based custom data
+ * @dev Includes emergency pause functionality for security
  */
-contract OracleCoreV2 is Ownable, ReentrancyGuard {
+contract OracleCoreV2 is Ownable, ReentrancyGuard, Pausable {
     GameRegistry public gameRegistry;
     GameSchemaRegistry public schemaRegistry;
 
@@ -140,7 +142,7 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
         uint256 _duration,
         bytes32 _schemaId,
         bytes calldata _customData
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         // Get match details from registry
         GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
         require(matchData.scheduledTime > 0, "OracleCoreV2: Match does not exist");
@@ -253,7 +255,7 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
     function submitResult(
         bytes32 _matchId,
         string calldata _resultData
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         // This is a simplified wrapper that creates a basic GameResult
         // with no participants/scores tracking, for backward compatibility
 
@@ -319,7 +321,7 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
         uint256[] calldata _durations,
         bytes32 _schemaId,
         bytes[] calldata _customDataArray
-    ) external nonReentrant returns (uint256 successCount) {
+    ) external nonReentrant whenNotPaused returns (uint256 successCount) {
         require(_matchIds.length > 0, "OracleCoreV2: Empty batch");
         require(_matchIds.length <= 50, "OracleCoreV2: Batch too large");
         require(
@@ -459,7 +461,7 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
     function disputeResult(
         bytes32 _matchId,
         string calldata _reason
-    ) external payable nonReentrant {
+    ) external payable nonReentrant whenNotPaused {
         GameResult storage result = results[_matchId];
         require(result.submittedAt > 0, "OracleCoreV2: Result does not exist");
         require(!result.isFinalized, "OracleCoreV2: Result already finalized");
@@ -532,7 +534,7 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
      * @notice Finalize a result after dispute window
      * @param _matchId The match to finalize
      */
-    function finalizeResult(bytes32 _matchId) external nonReentrant {
+    function finalizeResult(bytes32 _matchId) external nonReentrant whenNotPaused {
         GameResult storage result = results[_matchId];
         require(result.submittedAt > 0, "OracleCoreV2: Result does not exist");
         require(!result.isFinalized, "OracleCoreV2: Already finalized");
@@ -566,6 +568,7 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
     function batchFinalizeResults(bytes32[] calldata _matchIds)
         external
         nonReentrant
+        whenNotPaused
         returns (uint256 successCount)
     {
         require(_matchIds.length > 0, "OracleCoreV2: Empty batch");
@@ -747,6 +750,24 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard {
      */
     function getTotalResults() external view returns (uint256) {
         return allResults.length;
+    }
+
+    // Emergency pause functions
+
+    /**
+     * @notice Emergency pause - stops all critical operations
+     * @dev Only owner can pause. Use in case of security issues or bugs.
+     */
+    function emergencyPause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause the contract
+     * @dev Only owner can unpause after fixing issues
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     receive() external payable {}

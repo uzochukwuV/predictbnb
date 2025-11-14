@@ -200,26 +200,35 @@ contract GameSchemaRegistry is Ownable {
     }
 
     /**
-     * @notice Validate that encoded data matches schema
-     * @param _schemaId Schema to validate against
-     * @param _encodedData ABI-encoded data
-     * @return isValid Whether data matches schema structure
+     * @notice Validate encoded data against a schema
+     * @dev WARNING: This is a basic validation that only checks schema existence and non-empty data.
+     *      Actual ABI decoding validation should be done offchain or via try/catch when using the data.
+     *      This function exists for interface compatibility but cannot fully validate complex ABI structures.
+     * @param _schemaId The schema to validate against
+     * @param _encodedData The encoded data to validate
+     * @return isValid True if schema exists and data is non-empty (NOT a guarantee of correct encoding)
      */
     function validateEncodedData(
         bytes32 _schemaId,
         bytes calldata _encodedData
     ) external view returns (bool isValid) {
         GameSchema storage schema = schemas[_schemaId];
-        require(schema.createdAt > 0, "GameSchemaRegistry: Schema does not exist");
 
-        // Basic length check
+        // Check schema exists and is active
+        if (schema.createdAt == 0 || !schema.isActive) {
+            return false;
+        }
+
+        // Check data is non-empty
         if (_encodedData.length == 0) {
             return false;
         }
 
-        // For more complex validation, would need to decode based on types
-        // This is a simplified version - production would use assembly or libraries
-        return _encodedData.length > 0;
+        // NOTE: We cannot fully validate ABI-encoded data onchain without decoding it.
+        // Consumers should use try/catch when decoding to handle malformed data.
+        // Example: try abi.decode(_encodedData, (types...)) { } catch { revert(); }
+
+        return true;
     }
 
     // View functions

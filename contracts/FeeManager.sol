@@ -111,17 +111,33 @@ contract FeeManager is Ownable, ReentrancyGuard {
 
     /**
      * @notice Register as a data consumer (prediction market)
+     * @dev Requires minimum deposit to prevent free tier exploitation
      */
-    function registerConsumer() external {
+    function registerConsumer() external payable {
         require(
             consumers[msg.sender].consumerAddress == address(0),
             "FeeManager: Already registered"
         );
+        require(msg.value >= 0.01 ether, "FeeManager: Minimum 0.01 BNB deposit required");
+
+        uint256 depositAmount = msg.value;
+        uint256 bonusAmount = 0;
+
+        // Calculate volume bonus on initial deposit
+        if (depositAmount >= DEPOSIT_TIER_3) {
+            bonusAmount = (depositAmount * BONUS_TIER_3) / 10000;
+        } else if (depositAmount >= DEPOSIT_TIER_2) {
+            bonusAmount = (depositAmount * BONUS_TIER_2) / 10000;
+        } else if (depositAmount >= DEPOSIT_TIER_1) {
+            bonusAmount = (depositAmount * BONUS_TIER_1) / 10000;
+        }
+
+        uint256 totalCredit = depositAmount + bonusAmount;
 
         consumers[msg.sender] = Consumer({
             consumerAddress: msg.sender,
-            balance: 0,
-            totalDeposited: 0,
+            balance: totalCredit,
+            totalDeposited: depositAmount,
             totalQueriesMade: 0,
             totalFeesPaid: 0,
             lastQueryReset: block.timestamp,
@@ -132,6 +148,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
         allConsumers.push(msg.sender);
 
         emit ConsumerRegistered(msg.sender);
+        emit BalanceDeposited(msg.sender, depositAmount, bonusAmount, totalCredit);
     }
 
     /**
@@ -182,6 +199,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
 
     /**
      * @notice Query game result - deducts from prepaid balance or uses free tier
+     * @dev SECURITY: Payment is checked and deducted BEFORE returning data
      * @param _matchId The match to query
      * @return resultData The game result
      * @return resultHash Hash for verification
@@ -199,11 +217,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
         Consumer storage consumer = consumers[msg.sender];
         require(consumer.isActive, "FeeManager: Consumer not registered or inactive");
 
-        // Get result from oracle
-        (resultData, resultHash, isFinalized) = oracleCore.getResult(_matchId);
-        require(isFinalized, "FeeManager: Result not finalized yet");
-
-        // Get match and game info for revenue distribution
+        // Get match and game info FIRST for revenue distribution
         GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
         GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
 
@@ -212,14 +226,17 @@ contract FeeManager is Ownable, ReentrancyGuard {
 
         uint256 fee = 0;
 
-        // Check if within free daily limit
+        // CRITICAL: Check payment and deduct balance BEFORE getting data
         if (consumer.dailyQueriesUsed < FREE_DAILY_QUERIES) {
-            // Free query
+            // Free query - just increment counter
             consumer.dailyQueriesUsed++;
         } else {
-            // Paid query - deduct from balance
+            // Paid query - check balance and deduct BEFORE getting result
             fee = BASE_QUERY_FEE;
-            require(consumer.balance >= fee, "FeeManager: Insufficient balance. Please deposit funds.");
+            require(
+                consumer.balance >= fee,
+                "FeeManager: Insufficient balance. Please deposit funds."
+            );
 
             consumer.balance -= fee;
             consumer.totalFeesPaid += fee;
@@ -233,6 +250,10 @@ contract FeeManager is Ownable, ReentrancyGuard {
         matchQueryCounts[_matchId]++;
         gameQueryCounts[matchData.gameId]++;
 
+        // ONLY AFTER payment, get result from oracle
+        (resultData, resultHash, isFinalized) = oracleCore.getResult(_matchId);
+        require(isFinalized, "FeeManager: Result not finalized yet");
+
         emit QueryFeePaid(msg.sender, _matchId, matchData.gameId, fee, consumer.balance);
 
         return (resultData, resultHash, isFinalized);
@@ -240,6 +261,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
 
     /**
      * @notice Batch query multiple results - deducts from prepaid balance
+     * @dev SECURITY: Payment is checked and deducted BEFORE returning data
      * @param _matchIds Array of match IDs to query
      */
     function batchQueryResults(bytes32[] calldata _matchIds)
@@ -252,52 +274,65 @@ contract FeeManager is Ownable, ReentrancyGuard {
         require(_matchIds.length > 0, "FeeManager: Empty array");
         require(_matchIds.length <= 50, "FeeManager: Too many queries");
 
+        // Update daily queries counter once
+        _updateDailyQueries(consumer);
+
+        // CRITICAL: Calculate total fee FIRST
+        uint256 totalFee = 0;
+        uint256 freeQueriesUsed = 0;
+
+        // Determine how many are free vs paid
+        for (uint256 i = 0; i < _matchIds.length; i++) {
+            if (consumer.dailyQueriesUsed + freeQueriesUsed < FREE_DAILY_QUERIES) {
+                freeQueriesUsed++;
+            } else {
+                totalFee += BASE_QUERY_FEE;
+            }
+        }
+
+        // Check balance and deduct BEFORE getting any data
+        if (totalFee > 0) {
+            require(
+                consumer.balance >= totalFee,
+                "FeeManager: Insufficient balance for batch query"
+            );
+            consumer.balance -= totalFee;
+            consumer.totalFeesPaid += totalFee;
+        }
+
+        // Update free query counter
+        consumer.dailyQueriesUsed += freeQueriesUsed;
+
+        // ONLY AFTER payment, allocate arrays and get results
         string[] memory resultDataArray = new string[](_matchIds.length);
         bytes32[] memory resultHashArray = new bytes32[](_matchIds.length);
         bool[] memory isFinalizedArray = new bool[](_matchIds.length);
 
-        // Update daily queries counter once
-        _updateDailyQueries(consumer);
-
-        uint256 totalFee = 0;
+        uint256 paidQueriesProcessed = 0;
 
         // Process each query
         for (uint256 i = 0; i < _matchIds.length; i++) {
-            // Get result from oracle
+            // Get match and game info
+            GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchIds[i]);
+            GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
+
+            // Distribute revenue if this was a paid query
+            if (i >= freeQueriesUsed) {
+                _distributeRevenue(matchData.gameId, game.developer, BASE_QUERY_FEE);
+                paidQueriesProcessed++;
+            }
+
+            // Get result from oracle (after payment confirmed)
             (
                 resultDataArray[i],
                 resultHashArray[i],
                 isFinalizedArray[i]
             ) = oracleCore.getResult(_matchIds[i]);
 
-            // Get match and game info
-            GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchIds[i]);
-            GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
-
-            uint256 fee = 0;
-
-            // Check if within free daily limit
-            if (consumer.dailyQueriesUsed < FREE_DAILY_QUERIES) {
-                consumer.dailyQueriesUsed++;
-            } else {
-                fee = BASE_QUERY_FEE;
-                totalFee += fee;
-
-                // Distribute revenue to game developer
-                _distributeRevenue(matchData.gameId, game.developer, fee);
-            }
-
             // Update counts
             consumer.totalQueriesMade++;
             matchQueryCounts[_matchIds[i]]++;
             gameQueryCounts[matchData.gameId]++;
-        }
-
-        // Deduct total fee from balance
-        if (totalFee > 0) {
-            require(consumer.balance >= totalFee, "FeeManager: Insufficient balance for batch query");
-            consumer.balance -= totalFee;
-            consumer.totalFeesPaid += totalFee;
         }
 
         return (resultDataArray, resultHashArray, isFinalizedArray);
