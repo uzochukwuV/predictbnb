@@ -89,9 +89,15 @@ async function main() {
       REGISTRATION_STAKE: "0.1 BNB",
       DISPUTE_STAKE: "0.2 BNB",
       DISPUTE_WINDOW: "15 minutes",
-      BASE_QUERY_FEE: "0.0005 BNB",
-      MONTHLY_SUBSCRIPTION: "1 BNB",
-      FREE_DAILY_QUERIES: 100
+      BASE_QUERY_FEE: "0.003 BNB",
+      FREE_DAILY_QUERIES: 50,
+      DEPOSIT_TIER_1: "10 BNB",
+      DEPOSIT_TIER_2: "50 BNB",
+      DEPOSIT_TIER_3: "100 BNB",
+      BONUS_TIER_1: "5%",
+      BONUS_TIER_2: "10%",
+      BONUS_TIER_3: "15%",
+      REVENUE_SPLIT: "80% dev / 15% protocol / 5% disputer pool"
     },
     features: [
       "Schema-based custom game data",

@@ -752,6 +752,28 @@ contract OracleCoreV2 is Ownable, ReentrancyGuard, Pausable {
         return allResults.length;
     }
 
+    /**
+     * @notice Cancel a match (e.g., postponed, technical issues, insufficient players)
+     * @dev Can only be called by the game developer before a result is submitted
+     * @param _matchId The match to cancel
+     */
+    function cancelMatch(bytes32 _matchId) external nonReentrant whenNotPaused {
+        GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
+        require(matchData.scheduledTime > 0, "OracleCoreV2: Match does not exist");
+
+        GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
+        require(game.developer == msg.sender, "OracleCoreV2: Only game developer can cancel");
+        require(game.isActive, "OracleCoreV2: Game not active");
+
+        require(
+            results[_matchId].submittedAt == 0,
+            "OracleCoreV2: Cannot cancel match with submitted result"
+        );
+
+        // Update match status in registry to Cancelled
+        gameRegistry.updateMatchStatus(_matchId, GameRegistry.MatchStatus.Cancelled);
+    }
+
     // Emergency pause functions
 
     /**

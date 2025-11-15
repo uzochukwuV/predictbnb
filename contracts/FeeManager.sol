@@ -4,16 +4,17 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./GameRegistry.sol";
-import "./OracleCore.sol";
+import "./OracleCoreV2.sol";
 
 /**
  * @title FeeManager
  * @notice Manages fees for data access and distributes revenue to game developers based on usage
  * @dev Implements prepaid balance model: deposit funds, queries deduct from balance, developers earn per query
+ * @dev Uses OracleCoreV2 for enhanced schema support and security features
  */
 contract FeeManager is Ownable, ReentrancyGuard {
     GameRegistry public gameRegistry;
-    OracleCore public oracleCore;
+    OracleCoreV2 public oracleCore;
 
     // Fee structure (V2 - Prepaid Balance Model)
     uint256 public constant BASE_QUERY_FEE = 0.003 ether;     // $1.80 per query
@@ -106,7 +107,7 @@ contract FeeManager is Ownable, ReentrancyGuard {
         require(_gameRegistryAddress != address(0), "FeeManager: Invalid registry address");
         require(_oracleCore != address(0), "FeeManager: Invalid oracle address");
         gameRegistry = GameRegistry(_gameRegistryAddress);
-        oracleCore = OracleCore(_oracleCore);
+        oracleCore = OracleCoreV2(_oracleCore);
     }
 
     /**
