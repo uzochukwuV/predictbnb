@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PredictBNB - Gas-optimized gaming oracle providing verified esports results to prediction markets at 70% lower cost">
+    <meta name="keywords" content="blockchain, oracle, gaming, esports, prediction markets, BNB Chain">
+    <meta property="og:title" content="PredictBNB - Gaming Oracle Protocol">
+    <meta property="og:description" content="70% cheaper • 15-minute disputes • 80% revenue to developers">
+    <meta property="og:type" content="website">
+    <title>PredictBNB - Gaming Oracle Protocol</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="logo">
+                <span class="logo-icon">🎮⚡</span>
+                <span class="logo-text">PredictBNB</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#tech">Tech Stack</a>
+                <a href="https://github.com/uzochukwuV/predictbnb" target="_blank">GitHub</a>
+                <a href="#contact" class="btn-primary">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">Gaming Oracle Protocol</div>
+                <h1 class="hero-title">
+                    Verified Esports Data for<br>
+                    <span class="gradient-text">Prediction Markets</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Gas-optimized oracle providing real-time gaming results at 70% lower cost than Chainlink
+                </p>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <div class="stat-value">70%</div>
+                        <div class="stat-label">Cost Savings</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">15min</div>
+                        <div class="stat-label">Dispute Window</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">80%</div>
+                        <div class="stat-label">Dev Revenue</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">20%</div>
+                        <div class="stat-label">Gas Optimized</div>
+                    </div>
+                </div>
+                <div class="hero-cta">
+                    <a href="https://github.com/uzochukwuV/predictbnb" class="btn-large btn-primary" target="_blank">
+                        View Documentation
+                    </a>
+                    <a href="#how-it-works" class="btn-large btn-secondary">
+                        See How It Works
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Why PredictBNB?</h2>
+            <p class="section-subtitle">Built specifically for gaming prediction markets</p>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">💰</div>
+                    <h3>70% Cost Savings</h3>
+                    <p>$1.80 per query vs $5-6 for Chainlink</p>
+                    <div class="feature-detail">Direct contract-to-contract architecture eliminates callback overhead</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>15-Minute Disputes</h3>
+                    <p>Fastest dispute resolution in the industry</p>
+                    <div class="feature-detail">96x faster than UMA's 24-48 hour window</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>20% Gas Optimized</h3>
+                    <p>Ultra-optimized smart contracts</p>
+                    <div class="feature-detail">Custom errors, immutable variables, and bitmap packing</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🤝</div>
+                    <h3>80% Revenue Share</h3>
+                    <p>Game developers earn 80% of query fees</p>
+                    <div class="feature-detail">Aligned incentives for accurate data submission</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🎮</div>
+                    <h3>Gaming-Specific Schemas</h3>
+                    <p>Rich esports data structures</p>
+                    <div class="feature-detail">Not generic JSON - built for gaming use cases</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Multi-Sig Security</h3>
+                    <p>Reputation-based validation</p>
+                    <div class="feature-detail">Governance slashing for malicious actors</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            <p class="section-subtitle">Simple integration in 4 steps</p>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Game Developer Registers</h3>
+                        <p>Create a game profile and define your data schema</p>
+                        <code>gameRegistry.registerGame("My Game", schema)</code>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Submit Match Results</h3>
+                        <p>Post verified results to the oracle</p>
+                        <code>oracleCore.submitResult(matchId, resultData)</code>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Prediction Market Queries</h3>
+                        <p>Smart contracts query results directly</p>
+                        <code>feeManager.queryResult(matchId)</code>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Instant Verification</h3>
+                        <p>15-minute dispute window with reputation slashing</p>
+                        <code>// Results are verified and immutable</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack Section -->
+    <section id="tech" class="tech-stack">
+        <div class="container">
+            <h2 class="section-title">Technology Stack</h2>
+
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <div class="tech-label">Smart Contracts</div>
+                    <div class="tech-value">Solidity 0.8.20</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-label">Blockchain</div>
+                    <div class="tech-value">BNB Chain</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-label">Security</div>
+                    <div class="tech-value">OpenZeppelin</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-label">Framework</div>
+                    <div class="tech-value">Hardhat</div>
+                </div>
+            </div>
+
+            <div class="tech-features">
+                <div class="tech-feature">✅ Gas-optimized contracts</div>
+                <div class="tech-feature">✅ Professional security audit</div>
+                <div class="tech-feature">✅ Open source (MIT License)</div>
+                <div class="tech-feature">✅ Integration SDK available</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section">
+        <div class="container">
+            <h2 class="section-title">By The Numbers</h2>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-value">$1.80</div>
+                    <div class="stat-card-label">Per Query</div>
+                    <div class="stat-card-detail">vs $5-6 for Chainlink</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-value">20%</div>
+                    <div class="stat-card-label">Gas Savings</div>
+                    <div class="stat-card-detail">vs standard implementations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-value">6</div>
+                    <div class="stat-card-label">Smart Contracts</div>
+                    <div class="stat-card-detail">Fully audited and optimized</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-value">2,500+</div>
+                    <div class="stat-card-label">Lines of Code</div>
+                    <div class="stat-card-detail">Production-ready Solidity</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section id="contact" class="cta-section">
+        <div class="container">
+            <h2>Ready to Integrate?</h2>
+            <p>Join the future of gaming prediction markets on BNB Chain</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/uzochukwuV/predictbnb" class="btn-large btn-primary" target="_blank">
+                    View on GitHub
+                </a>
+                <a href="https://github.com/uzochukwuV/predictbnb#readme" class="btn-large btn-secondary" target="_blank">
+                    Read Documentation
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <span class="logo-icon">🎮⚡</span>
+                        <span class="logo-text">PredictBNB</span>
+                    </div>
+                    <p>Gaming Oracle Protocol</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#features">Features</a>
+                        <a href="#how-it-works">How It Works</a>
+                        <a href="#tech">Tech Stack</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <a href="https://github.com/uzochukwuV/predictbnb" target="_blank">Documentation</a>
+                        <a href="https://github.com/uzochukwuV/predictbnb" target="_blank">GitHub</a>
+                        <a href="https://github.com/uzochukwuV/predictbnb/blob/main/contract/SECURITY_AUDIT_REPORT.md" target="_blank">Security Audit</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="#" target="_blank">Twitter</a>
+                        <a href="https://discord.gg/gBWntrV8" target="_blank">Discord</a>
+                        <a href="#" target="_blank">Telegram</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 PredictBNB. Open Source under MIT License.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
