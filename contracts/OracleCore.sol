@@ -50,6 +50,9 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /// @notice Reference to FeeManager contract
     FeeManager public feeManager;
 
+    /// @notice Reference to DisputeResolver contract
+    address public disputeResolver;
+
     /// @notice Mapping of matchId to Result struct
     mapping(bytes32 => Result) public results;
 
@@ -358,7 +361,8 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @notice Mark a result as disputed (called by DisputeResolver)
      * @param matchId The match identifier
      */
-    function markResultDisputed(bytes32 matchId) external onlyOwner resultExists(matchId) {
+    function markResultDisputed(bytes32 matchId) external resultExists(matchId) {
+        if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
         results[matchId].isDisputed = true;
     }
 
@@ -376,6 +380,14 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function updateFeeManager(address payable _feeManager) external onlyOwner {
         feeManager = FeeManager(_feeManager);
+    }
+
+    /**
+     * @notice Update DisputeResolver address
+     * @param _disputeResolver New DisputeResolver address
+     */
+    function updateDisputeResolver(address _disputeResolver) external onlyOwner {
+        disputeResolver = _disputeResolver;
     }
 
     // ============ Internal Functions ============

@@ -21,6 +21,7 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     error NoEarningsToWithdraw();
     error TransferFailed();
     error FreeTierExceeded();
+    error Unauthorized();
 
     // ============ Structs ============
 
@@ -64,6 +65,9 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
 
     /// @notice Reference to GameRegistry
     GameRegistry public gameRegistry;
+
+    /// @notice Reference to DisputeResolver contract
+    address public disputeResolver;
 
     /// @notice Consumer prepaid balances
     mapping(address => ConsumerBalance) public consumerBalances;
@@ -258,9 +262,9 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function payDisputerReward(address disputer, uint256 amount)
         external
-        onlyOwner
         nonReentrant
     {
+        if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
         require(amount <= disputerPoolBalance, "Insufficient disputer pool");
 
         disputerPoolBalance -= amount;
@@ -344,6 +348,14 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function updateGameRegistry(address _gameRegistry) external onlyOwner {
         gameRegistry = GameRegistry(_gameRegistry);
+    }
+
+    /**
+     * @notice Update DisputeResolver address
+     * @param _disputeResolver New DisputeResolver address
+     */
+    function updateDisputeResolver(address _disputeResolver) external onlyOwner {
+        disputeResolver = _disputeResolver;
     }
 
     // ============ Internal Functions ============

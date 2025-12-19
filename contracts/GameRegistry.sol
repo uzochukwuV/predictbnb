@@ -64,6 +64,9 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     /// @notice Counter for total matches scheduled
     uint256 public totalMatches;
 
+    /// @notice Reference to DisputeResolver contract
+    address public disputeResolver;
+
     /// @notice Mapping to check if a developer has registered a game
     mapping(address => bytes32[]) public developerGames;
 
@@ -263,7 +266,8 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         bytes32 gameId,
         uint256 slashAmount,
         string calldata reason
-    ) external onlyOwner gameExists(gameId) {
+    ) external gameExists(gameId) {
+        if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
         Game storage game = games[gameId];
 
         if (slashAmount > game.stakedAmount) {
@@ -293,7 +297,8 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     function updateReputation(
         bytes32 gameId,
         uint16 newReputation
-    ) external onlyOwner gameExists(gameId) {
+    ) external gameExists(gameId) {
+        if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
         if (newReputation > 1000) revert InvalidReputation();
 
         uint16 oldReputation = games[gameId].reputation;
@@ -332,6 +337,14 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function updateMinimumStake(uint256 newMinimum) external onlyOwner {
         minimumStake = newMinimum;
+    }
+
+    /**
+     * @notice Update DisputeResolver address
+     * @param _disputeResolver New DisputeResolver address
+     */
+    function updateDisputeResolver(address _disputeResolver) external onlyOwner {
+        disputeResolver = _disputeResolver;
     }
 
     // ============ View Functions ============

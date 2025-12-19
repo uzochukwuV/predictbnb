@@ -63,6 +63,11 @@ describe("PredictBNB Integration Test", function () {
     await disputeResolver.waitForDeployment();
     console.log("✅ DisputeResolver deployed");
 
+    // 4.1. Connect all contracts to DisputeResolver
+    await oracleCore.updateDisputeResolver(await disputeResolver.getAddress());
+    await gameRegistry.updateDisputeResolver(await disputeResolver.getAddress());
+    await feeManager.updateDisputeResolver(await disputeResolver.getAddress());
+
     // 5. Deploy MockChessGame
     const MockChessGame = await ethers.getContractFactory("MockChessGame");
     mockChessGame = await MockChessGame.connect(gameDev).deploy(
