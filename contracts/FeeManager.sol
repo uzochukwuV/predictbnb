@@ -1,434 +1,433 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./GameRegistry.sol";
-import "./OracleCore.sol";
 
 /**
  * @title FeeManager
- * @notice Manages fees for data access and distributes revenue to game developers based on usage
- * @dev Implements prepaid balance model: deposit funds, queries deduct from balance, developers earn per query
+ * @notice Manages prepaid balances, query fees, volume bonuses, and revenue distribution
+ * @dev Implements 80/15/5 revenue split: developers, protocol, disputers
  */
-contract FeeManager is Ownable, ReentrancyGuard {
-    GameRegistry public gameRegistry;
-    OracleCore public oracleCore;
+contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+    // ============ Errors ============
 
-    // Fee structure (V2 - Prepaid Balance Model)
-    uint256 public constant BASE_QUERY_FEE = 0.003 ether;     // $1.80 per query
-    uint256 public constant FREE_DAILY_QUERIES = 50;          // Free queries per day for new users
+    error InsufficientBalance();
+    error InsufficientAllowance();
+    error InvalidAmount();
+    error GameNotRegistered();
+    error NoEarningsToWithdraw();
+    error TransferFailed();
+    error FreeTierExceeded();
 
-    // Volume discount bonuses (in basis points, 10000 = 100%)
-    uint256 public constant BONUS_TIER_1 = 500;   // 5% bonus on 10+ BNB deposits
-    uint256 public constant BONUS_TIER_2 = 1000;  // 10% bonus on 50+ BNB deposits
-    uint256 public constant BONUS_TIER_3 = 1500;  // 15% bonus on 100+ BNB deposits
+    // ============ Structs ============
 
-    uint256 public constant DEPOSIT_TIER_1 = 10 ether;
-    uint256 public constant DEPOSIT_TIER_2 = 50 ether;
-    uint256 public constant DEPOSIT_TIER_3 = 100 ether;
-
-    // Revenue split percentages (in basis points, 10000 = 100%)
-    uint256 public constant DEVELOPER_SHARE = 8000;     // 80% to game developer
-    uint256 public constant PROTOCOL_SHARE = 1500;      // 15% to protocol treasury
-    uint256 public constant DISPUTER_POOL_SHARE = 500;  // 5% to disputer rewards pool
-
-    // Consumer (prediction market) struct
-    struct Consumer {
-        address consumerAddress;
-        uint256 balance;            // Prepaid balance for queries
-        uint256 totalDeposited;     // Total amount ever deposited
-        uint256 totalQueriesMade;
-        uint256 totalFeesPaid;      // Total fees paid from balance
-        uint256 lastQueryReset;     // For daily free tier reset
-        uint256 dailyQueriesUsed;
-        bool isActive;
+    struct ConsumerBalance {
+        uint256 depositedAmount; // Original deposit in BNB
+        uint256 creditAmount; // Credits available (includes bonus)
+        uint256 queriesUsed;
+        uint64 lastResetTime; // For free tier daily reset
+        uint32 freeQueriesUsed; // Free queries used today
+        uint8 bonusTier; // 0 = no bonus, 1 = 5%, 2 = 10%, 3 = 15%
     }
 
-    // Revenue tracking for game developers
-    struct DeveloperRevenue {
+    struct DeveloperEarnings {
         uint256 totalEarned;
-        uint256 pendingWithdrawal;
-        uint256 totalWithdrawn;
-        uint256 queryCount;         // Total queries to their games
+        uint256 withdrawn;
+        uint256 pendingEarnings;
+        uint256 totalQueries;
     }
 
-    // Storage
-    mapping(address => Consumer) public consumers;
-    mapping(address => DeveloperRevenue) public developerRevenues;
-    mapping(string => uint256) public gameQueryCounts;      // gameId => query count
-    mapping(bytes32 => uint256) public matchQueryCounts;    // matchId => query count
+    // ============ State Variables ============
 
-    address[] public allConsumers;
-    uint256 public protocolTreasury;
-    uint256 public disputerPool;
+    /// @notice Base query fee in wei (e.g., 0.003 BNB = $1.80 at $600/BNB)
+    uint256 public queryFee;
 
-    // Events
-    event ConsumerRegistered(address indexed consumer);
+    /// @notice Free tier queries per day per consumer
+    uint32 public constant FREE_TIER_DAILY_LIMIT = 50;
+
+    /// @notice Revenue split percentages (basis points: 10000 = 100%)
+    uint16 public constant DEVELOPER_SHARE = 8000; // 80%
+    uint16 public constant PROTOCOL_SHARE = 1500;  // 15%
+    uint16 public constant DISPUTER_SHARE = 500;   // 5%
+
+    /// @notice Volume bonus thresholds and percentages
+    uint256 public constant TIER1_THRESHOLD = 10 ether;   // 10 BNB
+    uint256 public constant TIER2_THRESHOLD = 50 ether;   // 50 BNB
+    uint256 public constant TIER3_THRESHOLD = 100 ether;  // 100 BNB
+
+    uint8 public constant TIER1_BONUS = 5;   // 5% bonus
+    uint8 public constant TIER2_BONUS = 10;  // 10% bonus
+    uint8 public constant TIER3_BONUS = 15;  // 15% bonus
+
+    /// @notice Reference to GameRegistry
+    GameRegistry public gameRegistry;
+
+    /// @notice Consumer prepaid balances
+    mapping(address => ConsumerBalance) public consumerBalances;
+
+    /// @notice Developer earnings by gameId
+    mapping(bytes32 => DeveloperEarnings) public developerEarnings;
+
+    /// @notice Protocol treasury balance
+    uint256 public protocolBalance;
+
+    /// @notice Disputer pool balance
+    uint256 public disputerPoolBalance;
+
+    /// @notice Total queries processed
+    uint256 public totalQueries;
+
+    /// @notice Total revenue generated
+    uint256 public totalRevenue;
+
+    // ============ Events ============
 
     event BalanceDeposited(
         address indexed consumer,
-        uint256 amount,
-        uint256 bonusAmount,
-        uint256 newBalance
+        uint256 depositAmount,
+        uint256 creditAmount,
+        uint8 bonusTier
     );
 
-    event BalanceWithdrawn(
+    event QueryFeeCharged(
         address indexed consumer,
-        uint256 amount,
-        uint256 newBalance
-    );
-
-    event QueryFeePaid(
-        address indexed consumer,
-        bytes32 indexed matchId,
-        string gameId,
+        bytes32 indexed gameId,
         uint256 fee,
-        uint256 remainingBalance
+        bool usedFreeTier
     );
 
     event RevenueDistributed(
-        string indexed gameId,
-        address indexed developer,
-        uint256 amount,
-        uint256 queryCount
+        bytes32 indexed gameId,
+        uint256 developerAmount,
+        uint256 protocolAmount,
+        uint256 disputerAmount
     );
 
-    event DeveloperWithdrawal(
+    event EarningsWithdrawn(
+        bytes32 indexed gameId,
         address indexed developer,
         uint256 amount
     );
 
-    constructor(
-        address _gameRegistryAddress,
-        address _oracleCore
-    ) Ownable(msg.sender) {
-        require(_gameRegistryAddress != address(0), "FeeManager: Invalid registry address");
-        require(_oracleCore != address(0), "FeeManager: Invalid oracle address");
-        gameRegistry = GameRegistry(_gameRegistryAddress);
-        oracleCore = OracleCore(_oracleCore);
+    event ProtocolBalanceWithdrawn(
+        address indexed recipient,
+        uint256 amount
+    );
+
+    event DisputerRewardPaid(
+        address indexed disputer,
+        uint256 amount
+    );
+
+    event FreeTierReset(
+        address indexed consumer,
+        uint64 resetTime
+    );
+
+    // ============ Initialize ============
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    /**
-     * @notice Register as a data consumer (prediction market)
-     */
-    function registerConsumer() external {
-        require(
-            consumers[msg.sender].consumerAddress == address(0),
-            "FeeManager: Already registered"
-        );
+    function initialize(
+        address _gameRegistry,
+        uint256 _queryFee
+    ) public initializer {
+        __Ownable_init(msg.sender);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
-        consumers[msg.sender] = Consumer({
-            consumerAddress: msg.sender,
-            balance: 0,
-            totalDeposited: 0,
-            totalQueriesMade: 0,
-            totalFeesPaid: 0,
-            lastQueryReset: block.timestamp,
-            dailyQueriesUsed: 0,
-            isActive: true
-        });
-
-        allConsumers.push(msg.sender);
-
-        emit ConsumerRegistered(msg.sender);
+        gameRegistry = GameRegistry(_gameRegistry);
+        queryFee = _queryFee; // e.g., 0.003 ether for ~$1.80
     }
 
+    // ============ External Functions ============
+
     /**
-     * @notice Deposit funds to prepaid balance with volume bonus
-     * @dev Larger deposits receive bonus credits
-     *      10+ BNB = 5% bonus, 50+ BNB = 10% bonus, 100+ BNB = 15% bonus
+     * @notice Deposit BNB to prepaid balance with volume bonus
      */
     function depositBalance() external payable nonReentrant {
-        Consumer storage consumer = consumers[msg.sender];
-        require(consumer.consumerAddress != address(0), "FeeManager: Not registered");
-        require(msg.value > 0, "FeeManager: Must deposit non-zero amount");
+        if (msg.value == 0) revert InvalidAmount();
 
-        uint256 depositAmount = msg.value;
-        uint256 bonusAmount = 0;
+        ConsumerBalance storage balance = consumerBalances[msg.sender];
 
-        // Calculate volume bonus
-        if (depositAmount >= DEPOSIT_TIER_3) {
-            bonusAmount = (depositAmount * BONUS_TIER_3) / 10000;
-        } else if (depositAmount >= DEPOSIT_TIER_2) {
-            bonusAmount = (depositAmount * BONUS_TIER_2) / 10000;
-        } else if (depositAmount >= DEPOSIT_TIER_1) {
-            bonusAmount = (depositAmount * BONUS_TIER_1) / 10000;
+        // Determine bonus tier based on deposit amount
+        uint8 bonusTier = _calculateBonusTier(msg.value);
+        uint8 bonusPercentage = _getBonusPercentage(bonusTier);
+
+        // Calculate credit amount with bonus
+        uint256 bonusAmount = (msg.value * bonusPercentage) / 100;
+        uint256 creditAmount = msg.value + bonusAmount;
+
+        // Update balance
+        balance.depositedAmount += msg.value;
+        balance.creditAmount += creditAmount;
+        balance.bonusTier = bonusTier;
+
+        emit BalanceDeposited(msg.sender, msg.value, creditAmount, bonusTier);
+    }
+
+    /**
+     * @notice Charge query fee from consumer balance or free tier
+     * @param consumer The consumer address
+     * @param gameId The game being queried
+     */
+    function chargeQueryFee(address consumer, bytes32 gameId) external nonReentrant {
+        // Reset free tier if new day
+        _resetFreeTierIfNeeded(consumer);
+
+        ConsumerBalance storage balance = consumerBalances[consumer];
+
+        // Try to use free tier first
+        if (balance.freeQueriesUsed < FREE_TIER_DAILY_LIMIT) {
+            balance.freeQueriesUsed++;
+            balance.queriesUsed++;
+            totalQueries++;
+
+            emit QueryFeeCharged(consumer, gameId, 0, true);
+            return;
         }
 
-        uint256 totalCredit = depositAmount + bonusAmount;
-        consumer.balance += totalCredit;
-        consumer.totalDeposited += depositAmount;
+        // Check prepaid balance
+        if (balance.creditAmount < queryFee) revert InsufficientBalance();
 
-        emit BalanceDeposited(msg.sender, depositAmount, bonusAmount, consumer.balance);
+        // Deduct from balance
+        balance.creditAmount -= queryFee;
+        balance.queriesUsed++;
+        totalQueries++;
+        totalRevenue += queryFee;
+
+        // Distribute revenue
+        _distributeRevenue(gameId, queryFee);
+
+        emit QueryFeeCharged(consumer, gameId, queryFee, false);
     }
 
     /**
-     * @notice Withdraw unused balance
-     * @param _amount Amount to withdraw
+     * @notice Withdraw developer earnings for a game
+     * @param gameId The game identifier
      */
-    function withdrawBalance(uint256 _amount) external nonReentrant {
-        Consumer storage consumer = consumers[msg.sender];
-        require(consumer.consumerAddress != address(0), "FeeManager: Not registered");
-        require(_amount > 0, "FeeManager: Must withdraw non-zero amount");
-        require(consumer.balance >= _amount, "FeeManager: Insufficient balance");
+    function withdrawEarnings(bytes32 gameId) external nonReentrant {
+        GameRegistry.Game memory game = gameRegistry.getGame(gameId);
+        if (game.developer == address(0)) revert GameNotRegistered();
+        require(game.developer == msg.sender, "Not game developer");
 
-        consumer.balance -= _amount;
-        payable(msg.sender).transfer(_amount);
+        DeveloperEarnings storage earnings = developerEarnings[gameId];
+        if (earnings.pendingEarnings == 0) revert NoEarningsToWithdraw();
 
-        emit BalanceWithdrawn(msg.sender, _amount, consumer.balance);
+        uint256 amount = earnings.pendingEarnings;
+        earnings.pendingEarnings = 0;
+        earnings.withdrawn += amount;
+
+        // Transfer earnings
+        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        if (!success) revert TransferFailed();
+
+        emit EarningsWithdrawn(gameId, msg.sender, amount);
     }
 
-
     /**
-     * @notice Query game result - deducts from prepaid balance or uses free tier
-     * @param _matchId The match to query
-     * @return resultData The game result
-     * @return resultHash Hash for verification
-     * @return isFinalized Whether result is finalized
+     * @notice Withdraw protocol balance (owner only)
+     * @param recipient Address to receive funds
+     * @param amount Amount to withdraw
      */
-    function queryResult(bytes32 _matchId)
+    function withdrawProtocolBalance(address recipient, uint256 amount)
         external
+        onlyOwner
         nonReentrant
-        returns (
-            string memory resultData,
-            bytes32 resultHash,
-            bool isFinalized
-        )
     {
-        Consumer storage consumer = consumers[msg.sender];
-        require(consumer.isActive, "FeeManager: Consumer not registered or inactive");
+        require(amount <= protocolBalance, "Insufficient protocol balance");
 
-        // Get result from oracle
-        (resultData, resultHash, isFinalized) = oracleCore.getResult(_matchId);
-        require(isFinalized, "FeeManager: Result not finalized yet");
+        protocolBalance -= amount;
 
-        // Get match and game info for revenue distribution
-        GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
-        GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
+        (bool success, ) = payable(recipient).call{value: amount}("");
+        if (!success) revert TransferFailed();
 
-        // Update daily queries for free tier tracking
-        _updateDailyQueries(consumer);
-
-        uint256 fee = 0;
-
-        // Check if within free daily limit
-        if (consumer.dailyQueriesUsed < FREE_DAILY_QUERIES) {
-            // Free query
-            consumer.dailyQueriesUsed++;
-        } else {
-            // Paid query - deduct from balance
-            fee = BASE_QUERY_FEE;
-            require(consumer.balance >= fee, "FeeManager: Insufficient balance. Please deposit funds.");
-
-            consumer.balance -= fee;
-            consumer.totalFeesPaid += fee;
-
-            // Distribute revenue to game developer (80%), protocol (15%), disputer pool (5%)
-            _distributeRevenue(matchData.gameId, game.developer, fee);
-        }
-
-        // Update query counts
-        consumer.totalQueriesMade++;
-        matchQueryCounts[_matchId]++;
-        gameQueryCounts[matchData.gameId]++;
-
-        emit QueryFeePaid(msg.sender, _matchId, matchData.gameId, fee, consumer.balance);
-
-        return (resultData, resultHash, isFinalized);
+        emit ProtocolBalanceWithdrawn(recipient, amount);
     }
 
     /**
-     * @notice Batch query multiple results - deducts from prepaid balance
-     * @param _matchIds Array of match IDs to query
+     * @notice Pay disputer reward from pool
+     * @param disputer Address of disputer to reward
+     * @param amount Reward amount
      */
-    function batchQueryResults(bytes32[] calldata _matchIds)
+    function payDisputerReward(address disputer, uint256 amount)
         external
+        onlyOwner
         nonReentrant
-        returns (string[] memory, bytes32[] memory, bool[] memory)
     {
-        Consumer storage consumer = consumers[msg.sender];
-        require(consumer.isActive, "FeeManager: Consumer not registered or inactive");
-        require(_matchIds.length > 0, "FeeManager: Empty array");
-        require(_matchIds.length <= 50, "FeeManager: Too many queries");
+        require(amount <= disputerPoolBalance, "Insufficient disputer pool");
 
-        string[] memory resultDataArray = new string[](_matchIds.length);
-        bytes32[] memory resultHashArray = new bytes32[](_matchIds.length);
-        bool[] memory isFinalizedArray = new bool[](_matchIds.length);
+        disputerPoolBalance -= amount;
 
-        // Update daily queries counter once
-        _updateDailyQueries(consumer);
+        (bool success, ) = payable(disputer).call{value: amount}("");
+        if (!success) revert TransferFailed();
 
-        uint256 totalFee = 0;
-
-        // Process each query
-        for (uint256 i = 0; i < _matchIds.length; i++) {
-            // Get result from oracle
-            (
-                resultDataArray[i],
-                resultHashArray[i],
-                isFinalizedArray[i]
-            ) = oracleCore.getResult(_matchIds[i]);
-
-            // Get match and game info
-            GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchIds[i]);
-            GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
-
-            uint256 fee = 0;
-
-            // Check if within free daily limit
-            if (consumer.dailyQueriesUsed < FREE_DAILY_QUERIES) {
-                consumer.dailyQueriesUsed++;
-            } else {
-                fee = BASE_QUERY_FEE;
-                totalFee += fee;
-
-                // Distribute revenue to game developer
-                _distributeRevenue(matchData.gameId, game.developer, fee);
-            }
-
-            // Update counts
-            consumer.totalQueriesMade++;
-            matchQueryCounts[_matchIds[i]]++;
-            gameQueryCounts[matchData.gameId]++;
-        }
-
-        // Deduct total fee from balance
-        if (totalFee > 0) {
-            require(consumer.balance >= totalFee, "FeeManager: Insufficient balance for batch query");
-            consumer.balance -= totalFee;
-            consumer.totalFeesPaid += totalFee;
-        }
-
-        return (resultDataArray, resultHashArray, isFinalizedArray);
+        emit DisputerRewardPaid(disputer, amount);
     }
+
+    // ============ View Functions ============
 
     /**
-     * @notice Withdraw earned revenue (for game developers)
+     * @notice Get consumer balance details
+     * @param consumer The consumer address
      */
-    function withdrawRevenue() external nonReentrant {
-        DeveloperRevenue storage revenue = developerRevenues[msg.sender];
-        require(revenue.pendingWithdrawal > 0, "FeeManager: No revenue to withdraw");
-
-        uint256 amount = revenue.pendingWithdrawal;
-        revenue.pendingWithdrawal = 0;
-        revenue.totalWithdrawn += amount;
-
-        payable(msg.sender).transfer(amount);
-
-        emit DeveloperWithdrawal(msg.sender, amount);
-    }
-
-    /**
-     * @notice Withdraw protocol treasury (owner only)
-     */
-    function withdrawProtocolTreasury(uint256 _amount) external onlyOwner nonReentrant {
-        require(_amount <= protocolTreasury, "FeeManager: Insufficient treasury");
-        protocolTreasury -= _amount;
-        payable(owner()).transfer(_amount);
-    }
-
-    /**
-     * @notice Transfer funds to disputer pool in OracleCore
-     */
-    function fundDisputerPool(uint256 _amount) external onlyOwner nonReentrant {
-        require(_amount <= disputerPool, "FeeManager: Insufficient disputer pool");
-        disputerPool -= _amount;
-        payable(address(oracleCore)).transfer(_amount);
-    }
-
-    // Internal functions
-
-    /**
-     * @notice Update daily query counter (reset after 24 hours)
-     */
-    function _updateDailyQueries(Consumer storage _consumer) internal {
-        if (block.timestamp >= _consumer.lastQueryReset + 1 days) {
-            _consumer.dailyQueriesUsed = 0;
-            _consumer.lastQueryReset = block.timestamp;
-        }
-    }
-
-    /**
-     * @notice Distribute query revenue to stakeholders
-     */
-    function _distributeRevenue(
-        string memory _gameId,
-        address _developer,
-        uint256 _totalFee
-    ) internal {
-        // Calculate splits
-        uint256 developerAmount = (_totalFee * DEVELOPER_SHARE) / 10000;
-        uint256 protocolAmount = (_totalFee * PROTOCOL_SHARE) / 10000;
-        uint256 disputerAmount = (_totalFee * DISPUTER_POOL_SHARE) / 10000;
-
-        // Update developer revenue
-        DeveloperRevenue storage devRevenue = developerRevenues[_developer];
-        devRevenue.totalEarned += developerAmount;
-        devRevenue.pendingWithdrawal += developerAmount;
-        devRevenue.queryCount++;
-
-        // Add to protocol pools
-        protocolTreasury += protocolAmount;
-        disputerPool += disputerAmount;
-
-        emit RevenueDistributed(_gameId, _developer, developerAmount, devRevenue.queryCount);
-    }
-
-
-    // View functions
-
-    function getConsumer(address _consumer) external view returns (Consumer memory) {
-        return consumers[_consumer];
-    }
-
-    function getDeveloperRevenue(address _developer)
+    function getConsumerBalance(address consumer)
         external
         view
-        returns (DeveloperRevenue memory)
+        returns (ConsumerBalance memory)
     {
-        return developerRevenues[_developer];
+        return consumerBalances[consumer];
     }
 
-    function getGameQueryCount(string calldata _gameId) external view returns (uint256) {
-        return gameQueryCounts[_gameId];
+    /**
+     * @notice Get developer earnings details
+     * @param gameId The game identifier
+     */
+    function getDeveloperEarnings(bytes32 gameId)
+        external
+        view
+        returns (DeveloperEarnings memory)
+    {
+        return developerEarnings[gameId];
     }
 
-    function getConsumerBalance(address _consumer) external view returns (uint256) {
-        return consumers[_consumer].balance;
+    /**
+     * @notice Calculate how many queries a consumer can make
+     * @param consumer The consumer address
+     * @return Total queries available (free tier + prepaid)
+     */
+    function getAvailableQueries(address consumer) external view returns (uint256) {
+        ConsumerBalance memory balance = consumerBalances[consumer];
+
+        uint256 freeQueries = _getFreeQueriesRemaining(consumer);
+        uint256 paidQueries = balance.creditAmount / queryFee;
+
+        return freeQueries + paidQueries;
     }
 
-    function getRemainingFreeQueries(address _consumer) external view returns (uint256) {
-        Consumer memory consumer = consumers[_consumer];
-
-        // Check if need to reset
-        if (block.timestamp >= consumer.lastQueryReset + 1 days) {
-            return FREE_DAILY_QUERIES;
-        }
-
-        if (consumer.dailyQueriesUsed >= FREE_DAILY_QUERIES) {
-            return 0;
-        }
-
-        return FREE_DAILY_QUERIES - consumer.dailyQueriesUsed;
+    /**
+     * @notice Calculate expected revenue split for a query
+     * @param amount Query fee amount
+     * @return developerAmount Amount going to developer
+     * @return protocolAmount Amount going to protocol
+     * @return disputerAmount Amount going to disputer pool
+     */
+    function calculateRevenueSplit(uint256 amount)
+        public
+        pure
+        returns (uint256 developerAmount, uint256 protocolAmount, uint256 disputerAmount)
+    {
+        developerAmount = (amount * DEVELOPER_SHARE) / 10000;
+        protocolAmount = (amount * PROTOCOL_SHARE) / 10000;
+        disputerAmount = (amount * DISPUTER_SHARE) / 10000;
     }
 
-    function calculateDepositBonus(uint256 _depositAmount) external pure returns (uint256) {
-        if (_depositAmount >= DEPOSIT_TIER_3) {
-            return (_depositAmount * BONUS_TIER_3) / 10000;
-        } else if (_depositAmount >= DEPOSIT_TIER_2) {
-            return (_depositAmount * BONUS_TIER_2) / 10000;
-        } else if (_depositAmount >= DEPOSIT_TIER_1) {
-            return (_depositAmount * BONUS_TIER_1) / 10000;
-        }
+    // ============ Admin Functions ============
+
+    /**
+     * @notice Update query fee
+     * @param newFee New query fee in wei
+     */
+    function updateQueryFee(uint256 newFee) external onlyOwner {
+        queryFee = newFee;
+    }
+
+    /**
+     * @notice Update GameRegistry address
+     * @param _gameRegistry New GameRegistry address
+     */
+    function updateGameRegistry(address _gameRegistry) external onlyOwner {
+        gameRegistry = GameRegistry(_gameRegistry);
+    }
+
+    // ============ Internal Functions ============
+
+    /**
+     * @notice Distribute revenue according to 80/15/5 split
+     */
+    function _distributeRevenue(bytes32 gameId, uint256 amount) internal {
+        (uint256 devAmount, uint256 protocolAmount, uint256 disputerAmount) =
+            calculateRevenueSplit(amount);
+
+        // Update developer earnings
+        DeveloperEarnings storage earnings = developerEarnings[gameId];
+        earnings.totalEarned += devAmount;
+        earnings.pendingEarnings += devAmount;
+        earnings.totalQueries++;
+
+        // Update protocol balance
+        protocolBalance += protocolAmount;
+
+        // Update disputer pool
+        disputerPoolBalance += disputerAmount;
+
+        emit RevenueDistributed(gameId, devAmount, protocolAmount, disputerAmount);
+    }
+
+    /**
+     * @notice Calculate bonus tier based on deposit amount
+     */
+    function _calculateBonusTier(uint256 amount) internal pure returns (uint8) {
+        if (amount >= TIER3_THRESHOLD) return 3;
+        if (amount >= TIER2_THRESHOLD) return 2;
+        if (amount >= TIER1_THRESHOLD) return 1;
         return 0;
     }
 
-    function getTotalConsumers() external view returns (uint256) {
-        return allConsumers.length;
+    /**
+     * @notice Get bonus percentage for a tier
+     */
+    function _getBonusPercentage(uint8 tier) internal pure returns (uint8) {
+        if (tier == 3) return TIER3_BONUS;
+        if (tier == 2) return TIER2_BONUS;
+        if (tier == 1) return TIER1_BONUS;
+        return 0;
     }
 
+    /**
+     * @notice Reset free tier if 24 hours have passed
+     */
+    function _resetFreeTierIfNeeded(address consumer) internal {
+        ConsumerBalance storage balance = consumerBalances[consumer];
+
+        // Check if it's a new day (24 hours since last reset)
+        if (block.timestamp >= balance.lastResetTime + 1 days) {
+            balance.freeQueriesUsed = 0;
+            balance.lastResetTime = uint64(block.timestamp);
+
+            emit FreeTierReset(consumer, uint64(block.timestamp));
+        }
+    }
+
+    /**
+     * @notice Get remaining free queries for today
+     */
+    function _getFreeQueriesRemaining(address consumer) internal view returns (uint256) {
+        ConsumerBalance memory balance = consumerBalances[consumer];
+
+        // Check if free tier needs reset
+        if (block.timestamp >= balance.lastResetTime + 1 days) {
+            return FREE_TIER_DAILY_LIMIT;
+        }
+
+        if (balance.freeQueriesUsed >= FREE_TIER_DAILY_LIMIT) {
+            return 0;
+        }
+
+        return FREE_TIER_DAILY_LIMIT - balance.freeQueriesUsed;
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ============ Receive Function ============
+
     receive() external payable {
-        protocolTreasury += msg.value;
+        // Allow contract to receive BNB
     }
 }

@@ -1,328 +1,378 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title GameRegistry
- * @notice Core contract for registering games and scheduling matches for the gaming oracle
- * @dev Game developers register their games and schedule matches that can be used by prediction markets
+ * @notice Manages game registration, staking, and match scheduling for PredictBNB oracle
+ * @dev Implements game reputation system and developer verification
  */
-contract GameRegistry is Ownable, ReentrancyGuard {
-    // Minimum stake required to register a game (anti-spam + slashing mechanism)
-    uint256 public constant REGISTRATION_STAKE = 0.1 ether;
+contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+    // ============ Errors ============
 
-    // Game types enum for categorization
-    enum GameType {
-        MOBA,           // League of Legends, Dota 2
-        FPS,            // CS:GO, Valorant
-        BattleRoyale,   // Fortnite, PUBG
-        Sports,         // FIFA, NBA 2K
-        Fighting,       // Street Fighter, Tekken
-        RTS,            // StarCraft
-        CardGame,       // Hearthstone, Magic
-        Other
-    }
+    error InsufficientStake();
+    error GameNotRegistered();
+    error GameAlreadyRegistered();
+    error MatchAlreadyScheduled();
+    error MatchNotFound();
+    error Unauthorized();
+    error InvalidReputation();
+    error GameIsBanned();
+    error InvalidMatchTime();
 
-    // Match status enum
-    enum MatchStatus {
-        Scheduled,      // Match is scheduled but not started
-        InProgress,     // Match is currently ongoing
-        Completed,      // Match is finished and result submitted
-        Disputed,       // Match result is under dispute
-        Finalized,      // Match result is finalized (after dispute period)
-        Cancelled       // Match was cancelled
-    }
+    // ============ Structs ============
 
-    // Game struct
     struct Game {
-        string name;
-        string gameId;          // Unique identifier from game developer
-        GameType gameType;
         address developer;
+        string name;
+        string metadata; // JSON metadata (genre, website, etc.)
         uint256 stakedAmount;
+        uint16 reputation; // 0-1000 score
+        uint64 registeredAt;
+        uint32 totalMatches;
+        uint32 totalDisputes;
         bool isActive;
-        uint256 registeredAt;
-        uint256 totalMatches;
-        uint256 reputationScore;    // 0-1000, starts at 500
+        bool isBanned;
     }
 
-    // Match struct
     struct Match {
-        bytes32 matchId;            // keccak256(gameId, developerMatchId, timestamp)
-        string gameId;
-        string developerMatchId;    // Match ID from game developer's system
-        uint256 scheduledTime;
-        uint256 actualStartTime;
-        MatchStatus status;
-        string metadata;            // JSON string with teams, players, etc.
-        address submitter;          // Who submitted the result
-        uint256 submittedAt;
+        bytes32 gameId;
+        uint64 scheduledTime;
+        string metadata; // JSON metadata (teams, tournament, etc.)
+        address submitter;
+        bool hasResult;
+        uint64 createdAt;
     }
 
-    // Storage
-    mapping(string => Game) public games;                       // gameId => Game
-    mapping(bytes32 => Match) public matches;                   // matchId => Match
-    mapping(address => string[]) public developerGames;         // developer => gameIds[]
-    mapping(string => bytes32[]) public gameMatches;            // gameId => matchIds[]
+    // ============ State Variables ============
 
-    string[] public allGameIds;
-    bytes32[] public allMatchIds;
+    /// @notice Minimum stake required to register a game (0.1 BNB)
+    uint256 public minimumStake;
 
-    // Events
+    /// @notice Mapping of gameId to Game struct
+    mapping(bytes32 => Game) public games;
+
+    /// @notice Mapping of matchId to Match struct
+    mapping(bytes32 => Match) public matches;
+
+    /// @notice Counter for total games registered
+    uint256 public totalGames;
+
+    /// @notice Counter for total matches scheduled
+    uint256 public totalMatches;
+
+    /// @notice Mapping to check if a developer has registered a game
+    mapping(address => bytes32[]) public developerGames;
+
+    // ============ Events ============
+
     event GameRegistered(
-        string indexed gameId,
-        string name,
-        GameType gameType,
+        bytes32 indexed gameId,
         address indexed developer,
-        uint256 stakedAmount
+        string name,
+        uint256 stakedAmount,
+        uint64 timestamp
     );
-
-    event GameDeactivated(string indexed gameId, address indexed developer);
 
     event MatchScheduled(
         bytes32 indexed matchId,
-        string indexed gameId,
-        string developerMatchId,
-        uint256 scheduledTime,
+        bytes32 indexed gameId,
+        address indexed submitter,
+        uint64 scheduledTime,
         string metadata
     );
 
-    event MatchStatusChanged(
-        bytes32 indexed matchId,
-        MatchStatus oldStatus,
-        MatchStatus newStatus
+    event StakeIncreased(
+        bytes32 indexed gameId,
+        address indexed developer,
+        uint256 additionalAmount,
+        uint256 newTotal
     );
 
     event StakeSlashed(
-        string indexed gameId,
-        address indexed developer,
+        bytes32 indexed gameId,
         uint256 slashedAmount,
+        uint256 remainingStake,
         string reason
     );
 
     event ReputationUpdated(
-        string indexed gameId,
-        uint256 oldScore,
-        uint256 newScore
+        bytes32 indexed gameId,
+        uint16 oldReputation,
+        uint16 newReputation
     );
 
-    constructor() Ownable(msg.sender) {}
+    event GameDeactivated(bytes32 indexed gameId, string reason);
+
+    event GameReactivated(bytes32 indexed gameId);
+
+    event GameBanned(bytes32 indexed gameId, string reason);
+
+    event ResultSubmitted(bytes32 indexed matchId, bytes32 indexed gameId);
+
+    // ============ Modifiers ============
+
+    modifier onlyGameDeveloper(bytes32 gameId) {
+        if (games[gameId].developer != msg.sender) revert Unauthorized();
+        _;
+    }
+
+    modifier gameExists(bytes32 gameId) {
+        if (games[gameId].developer == address(0)) revert GameNotRegistered();
+        _;
+    }
+
+    modifier gameActive(bytes32 gameId) {
+        if (!games[gameId].isActive) revert GameNotRegistered();
+        if (games[gameId].isBanned) revert GameIsBanned();
+        _;
+    }
+
+    // ============ Initialize ============
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(uint256 _minimumStake) public initializer {
+        __Ownable_init(msg.sender);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
+
+        minimumStake = _minimumStake; // 0.1 BNB = 100000000000000000 wei
+    }
+
+    // ============ External Functions ============
 
     /**
-     * @notice Register a new game with the oracle
-     * @param _gameId Unique identifier for the game
-     * @param _name Human-readable game name
-     * @param _gameType Type of game from GameType enum
+     * @notice Register a new game on the oracle
+     * @param name The name of the game
+     * @param metadata JSON string with game metadata
+     * @return gameId The unique identifier for the registered game
      */
     function registerGame(
-        string calldata _gameId,
-        string calldata _name,
-        GameType _gameType
-    ) external payable nonReentrant {
-        require(bytes(_gameId).length > 0, "GameRegistry: Empty game ID");
-        require(bytes(_name).length > 0, "GameRegistry: Empty name");
-        require(games[_gameId].developer == address(0), "GameRegistry: Game already registered");
-        require(msg.value == REGISTRATION_STAKE, "GameRegistry: Incorrect stake amount");
+        string calldata name,
+        string calldata metadata
+    ) external payable nonReentrant returns (bytes32) {
+        if (msg.value < minimumStake) revert InsufficientStake();
 
-        games[_gameId] = Game({
-            name: _name,
-            gameId: _gameId,
-            gameType: _gameType,
+        // Generate unique gameId from developer address and name
+        bytes32 gameId = keccak256(abi.encodePacked(msg.sender, name, block.timestamp));
+
+        if (games[gameId].developer != address(0)) revert GameAlreadyRegistered();
+
+        games[gameId] = Game({
             developer: msg.sender,
+            name: name,
+            metadata: metadata,
             stakedAmount: msg.value,
-            isActive: true,
-            registeredAt: block.timestamp,
+            reputation: 500, // Start with neutral reputation
+            registeredAt: uint64(block.timestamp),
             totalMatches: 0,
-            reputationScore: 500  // Start with neutral reputation
+            totalDisputes: 0,
+            isActive: true,
+            isBanned: false
         });
 
-        developerGames[msg.sender].push(_gameId);
-        allGameIds.push(_gameId);
+        developerGames[msg.sender].push(gameId);
+        totalGames++;
 
-        emit GameRegistered(_gameId, _name, _gameType, msg.sender, msg.value);
+        emit GameRegistered(gameId, msg.sender, name, msg.value, uint64(block.timestamp));
+
+        return gameId;
     }
 
     /**
-     * @notice Schedule a new match for a registered game
-     * @param _gameId The game this match belongs to
-     * @param _developerMatchId Unique match ID from developer's system
-     * @param _scheduledTime When the match is scheduled to start
-     * @param _metadata JSON string with match details (teams, players, etc.)
+     * @notice Schedule a match before it takes place
+     * @param gameId The game identifier
+     * @param scheduledTime Unix timestamp when the match will start
+     * @param metadata JSON string with match metadata (teams, tournament, etc.)
+     * @return matchId The unique identifier for the scheduled match
      */
     function scheduleMatch(
-        string calldata _gameId,
-        string calldata _developerMatchId,
-        uint256 _scheduledTime,
-        string calldata _metadata
-    ) external returns (bytes32) {
-        Game storage game = games[_gameId];
-        require(game.isActive, "GameRegistry: Game not active");
-        require(game.developer == msg.sender, "GameRegistry: Only game developer can schedule");
-        require(_scheduledTime > block.timestamp, "GameRegistry: Must schedule in future");
-        require(bytes(_developerMatchId).length > 0, "GameRegistry: Empty match ID");
+        bytes32 gameId,
+        uint64 scheduledTime,
+        string calldata metadata
+    ) external gameExists(gameId) gameActive(gameId) onlyGameDeveloper(gameId) returns (bytes32) {
+        if (scheduledTime <= block.timestamp) revert InvalidMatchTime();
 
-        // Create unique match ID
+        // Generate unique matchId
         bytes32 matchId = keccak256(
-            abi.encodePacked(_gameId, _developerMatchId, _scheduledTime, block.timestamp)
+            abi.encodePacked(gameId, scheduledTime, metadata, block.timestamp)
         );
 
-        require(matches[matchId].scheduledTime == 0, "GameRegistry: Match already exists");
+        if (matches[matchId].submitter != address(0)) revert MatchAlreadyScheduled();
 
         matches[matchId] = Match({
-            matchId: matchId,
-            gameId: _gameId,
-            developerMatchId: _developerMatchId,
-            scheduledTime: _scheduledTime,
-            actualStartTime: 0,
-            status: MatchStatus.Scheduled,
-            metadata: _metadata,
-            submitter: address(0),
-            submittedAt: 0
+            gameId: gameId,
+            scheduledTime: scheduledTime,
+            metadata: metadata,
+            submitter: msg.sender,
+            hasResult: false,
+            createdAt: uint64(block.timestamp)
         });
 
-        gameMatches[_gameId].push(matchId);
-        allMatchIds.push(matchId);
-        game.totalMatches++;
+        games[gameId].totalMatches++;
+        totalMatches++;
 
-        emit MatchScheduled(matchId, _gameId, _developerMatchId, _scheduledTime, _metadata);
+        emit MatchScheduled(matchId, gameId, msg.sender, scheduledTime, metadata);
 
         return matchId;
     }
 
     /**
-     * @notice Update match status (called by OracleCore contract)
-     * @param _matchId The match to update
-     * @param _newStatus New status for the match
+     * @notice Increase stake for a registered game
+     * @param gameId The game identifier
      */
-    function updateMatchStatus(
-        bytes32 _matchId,
-        MatchStatus _newStatus
-    ) external onlyOwner {
-        Match storage matchData = matches[_matchId];
-        require(matchData.scheduledTime > 0, "GameRegistry: Match does not exist");
+    function increaseStake(bytes32 gameId)
+        external
+        payable
+        gameExists(gameId)
+        onlyGameDeveloper(gameId)
+    {
+        games[gameId].stakedAmount += msg.value;
 
-        MatchStatus oldStatus = matchData.status;
-        matchData.status = _newStatus;
-
-        if (_newStatus == MatchStatus.InProgress && matchData.actualStartTime == 0) {
-            matchData.actualStartTime = block.timestamp;
-        }
-
-        emit MatchStatusChanged(_matchId, oldStatus, _newStatus);
+        emit StakeIncreased(gameId, msg.sender, msg.value, games[gameId].stakedAmount);
     }
 
     /**
-     * @notice Slash stake from a game developer for malicious behavior
-     * @param _gameId The game whose stake to slash
-     * @param _slashAmount Amount to slash
-     * @param _reason Reason for slashing
+     * @notice Mark that a result has been submitted for a match (called by OracleCore)
+     * @param matchId The match identifier
+     */
+    function markResultSubmitted(bytes32 matchId) external {
+        // TODO: Add access control - only OracleCore should call this
+        if (matches[matchId].submitter == address(0)) revert MatchNotFound();
+        matches[matchId].hasResult = true;
+
+        emit ResultSubmitted(matchId, matches[matchId].gameId);
+    }
+
+    // ============ Admin Functions ============
+
+    /**
+     * @notice Slash a game's stake for fraudulent behavior
+     * @param gameId The game identifier
+     * @param slashAmount Amount to slash
+     * @param reason Reason for slashing
      */
     function slashStake(
-        string calldata _gameId,
-        uint256 _slashAmount,
-        string calldata _reason
-    ) external onlyOwner nonReentrant {
-        Game storage game = games[_gameId];
-        require(game.stakedAmount >= _slashAmount, "GameRegistry: Insufficient stake");
+        bytes32 gameId,
+        uint256 slashAmount,
+        string calldata reason
+    ) external onlyOwner gameExists(gameId) {
+        Game storage game = games[gameId];
 
-        game.stakedAmount -= _slashAmount;
-
-        // If stake drops below minimum, deactivate game
-        if (game.stakedAmount < REGISTRATION_STAKE) {
-            game.isActive = false;
-            emit GameDeactivated(_gameId, game.developer);
+        if (slashAmount > game.stakedAmount) {
+            slashAmount = game.stakedAmount;
         }
 
-        emit StakeSlashed(_gameId, game.developer, _slashAmount, _reason);
+        game.stakedAmount -= slashAmount;
 
-        // Transfer slashed amount to protocol treasury (owner)
-        payable(owner()).transfer(_slashAmount);
+        // Send slashed amount to protocol treasury (owner)
+        (bool success, ) = payable(owner()).call{value: slashAmount}("");
+        require(success, "Transfer failed");
+
+        emit StakeSlashed(gameId, slashAmount, game.stakedAmount, reason);
+
+        // If stake falls below minimum, deactivate game
+        if (game.stakedAmount < minimumStake) {
+            game.isActive = false;
+            emit GameDeactivated(gameId, "Insufficient stake after slash");
+        }
     }
 
     /**
-     * @notice Update reputation score for a game (called by OracleCore after disputes)
-     * @param _gameId The game to update
-     * @param _newScore New reputation score (0-1000)
+     * @notice Update a game's reputation score
+     * @param gameId The game identifier
+     * @param newReputation New reputation score (0-1000)
      */
     function updateReputation(
-        string calldata _gameId,
-        uint256 _newScore
-    ) external onlyOwner {
-        require(_newScore <= 1000, "GameRegistry: Score must be <= 1000");
-        Game storage game = games[_gameId];
-        require(game.developer != address(0), "GameRegistry: Game does not exist");
+        bytes32 gameId,
+        uint16 newReputation
+    ) external onlyOwner gameExists(gameId) {
+        if (newReputation > 1000) revert InvalidReputation();
 
-        uint256 oldScore = game.reputationScore;
-        game.reputationScore = _newScore;
+        uint16 oldReputation = games[gameId].reputation;
+        games[gameId].reputation = newReputation;
 
-        emit ReputationUpdated(_gameId, oldScore, _newScore);
+        emit ReputationUpdated(gameId, oldReputation, newReputation);
     }
 
     /**
-     * @notice Deactivate a game (developer can withdraw stake after cooldown)
-     * @param _gameId The game to deactivate
+     * @notice Increment dispute counter for a game
+     * @param gameId The game identifier
      */
-    function deactivateGame(string calldata _gameId) external nonReentrant {
-        Game storage game = games[_gameId];
-        require(game.developer == msg.sender, "GameRegistry: Only developer can deactivate");
-        require(game.isActive, "GameRegistry: Game already inactive");
-
-        game.isActive = false;
-
-        emit GameDeactivated(_gameId, msg.sender);
+    function incrementDisputes(bytes32 gameId) external onlyOwner gameExists(gameId) {
+        games[gameId].totalDisputes++;
     }
 
     /**
-     * @notice Withdraw stake after deactivating (7 day cooldown)
-     * @param _gameId The game to withdraw stake from
+     * @notice Ban a game permanently
+     * @param gameId The game identifier
+     * @param reason Reason for ban
      */
-    function withdrawStake(string calldata _gameId) external nonReentrant {
-        Game storage game = games[_gameId];
-        require(game.developer == msg.sender, "GameRegistry: Only developer can withdraw");
-        require(!game.isActive, "GameRegistry: Game must be deactivated first");
-        require(game.stakedAmount > 0, "GameRegistry: No stake to withdraw");
+    function banGame(bytes32 gameId, string calldata reason)
+        external
+        onlyOwner
+        gameExists(gameId)
+    {
+        games[gameId].isBanned = true;
+        games[gameId].isActive = false;
 
-        // 7 day cooldown period
-        require(
-            block.timestamp >= game.registeredAt + 7 days,
-            "GameRegistry: Cooldown period not elapsed"
-        );
-
-        uint256 amount = game.stakedAmount;
-        game.stakedAmount = 0;
-
-        payable(msg.sender).transfer(amount);
+        emit GameBanned(gameId, reason);
     }
 
-    // View functions
-
-    function getGame(string calldata _gameId) external view returns (Game memory) {
-        return games[_gameId];
+    /**
+     * @notice Update minimum stake requirement
+     * @param newMinimum New minimum stake amount
+     */
+    function updateMinimumStake(uint256 newMinimum) external onlyOwner {
+        minimumStake = newMinimum;
     }
 
-    function getMatch(bytes32 _matchId) external view returns (Match memory) {
-        return matches[_matchId];
+    // ============ View Functions ============
+
+    /**
+     * @notice Get game details
+     * @param gameId The game identifier
+     */
+    function getGame(bytes32 gameId) external view returns (Game memory) {
+        return games[gameId];
     }
 
-    function getDeveloperGames(address _developer) external view returns (string[] memory) {
-        return developerGames[_developer];
+    /**
+     * @notice Get match details
+     * @param matchId The match identifier
+     */
+    function getMatch(bytes32 matchId) external view returns (Match memory) {
+        return matches[matchId];
     }
 
-    function getGameMatches(string calldata _gameId) external view returns (bytes32[] memory) {
-        return gameMatches[_gameId];
+    /**
+     * @notice Get all games registered by a developer
+     * @param developer The developer address
+     */
+    function getDeveloperGames(address developer) external view returns (bytes32[] memory) {
+        return developerGames[developer];
     }
 
-    function getAllGames() external view returns (string[] memory) {
-        return allGameIds;
+    /**
+     * @notice Check if a game is in good standing
+     * @param gameId The game identifier
+     */
+    function isGameInGoodStanding(bytes32 gameId) external view returns (bool) {
+        Game memory game = games[gameId];
+        return game.isActive &&
+               !game.isBanned &&
+               game.stakedAmount >= minimumStake &&
+               game.reputation >= 300; // Minimum acceptable reputation
     }
 
-    function getTotalGames() external view returns (uint256) {
-        return allGameIds.length;
-    }
+    // ============ Internal Functions ============
 
-    function getTotalMatches() external view returns (uint256) {
-        return allMatchIds.length;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

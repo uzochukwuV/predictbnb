@@ -1,382 +1,395 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./GameRegistry.sol";
+import "./FeeManager.sol";
 
 /**
  * @title OracleCore
- * @notice Core oracle contract for submitting and finalizing game results
- * @dev Implements optimistic oracle pattern with fast 15-30 min dispute window
+ * @notice Core oracle contract for submitting and querying game results with self-describing data
+ * @dev Implements universal result submission with flexible encoding and quick-access fields
  */
-contract OracleCore is Ownable, ReentrancyGuard {
-    GameRegistry public gameRegistry;
+contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+    // ============ Errors ============
 
-    // Fast dispute window: 15 minutes (vs UMA's 24-48 hours)
-    uint256 public constant DISPUTE_WINDOW = 15 minutes;
+    error MatchNotFound();
+    error ResultAlreadySubmitted();
+    error ResultNotFinalized();
+    error DisputeWindowActive();
+    error DisputeWindowClosed();
+    error Unauthorized();
+    error InvalidMatchTime();
+    error FieldNotFound();
+    error GameNotActive();
 
-    // Dispute stake must be 2x registration stake
-    uint256 public constant DISPUTE_STAKE = 0.2 ether;
+    // ============ Structs ============
 
-    // Result verification struct
-    struct GameResult {
+    struct Result {
         bytes32 matchId;
-        string resultData;          // JSON string with scores, winners, stats
-        bytes32 resultHash;         // Hash of result data for integrity
+        bytes32 gameId;
         address submitter;
-        uint256 submittedAt;
-        uint256 disputeDeadline;
+        bytes encodedData; // Raw encoded result data (any format)
+        string decodeSchema; // Instructions on how to decode the data
+        uint64 submittedAt;
+        uint64 finalizedAt;
         bool isFinalized;
         bool isDisputed;
-        address disputer;
-        uint256 disputeStake;
-        string disputeReason;
     }
 
-    // Validation check results
-    struct ValidationChecks {
-        bool timingValid;           // Match ended after scheduled time
-        bool authorizedSubmitter;   // Submitted by game developer
-        bool dataIntegrity;         // Hash matches data
-        bool noImpossibleValues;    // Basic sanity checks passed
-    }
+    // ============ State Variables ============
 
-    // Storage
-    mapping(bytes32 => GameResult) public results;          // matchId => Result
-    mapping(bytes32 => ValidationChecks) public validations; // matchId => Checks
-    mapping(address => uint256) public disputerRewards;     // Accumulated rewards for successful disputers
+    /// @notice Dispute window duration (15 minutes)
+    uint256 public constant DISPUTE_WINDOW = 15 minutes;
 
-    bytes32[] public allResults;
+    /// @notice Reference to GameRegistry contract
+    GameRegistry public gameRegistry;
 
-    // Events
+    /// @notice Reference to FeeManager contract
+    FeeManager public feeManager;
+
+    /// @notice Mapping of matchId to Result struct
+    mapping(bytes32 => Result) public results;
+
+    /// @notice Mapping of matchId to quick-access fields (fieldHash => value)
+    mapping(bytes32 => mapping(bytes32 => bytes32)) public quickFields;
+
+    /// @notice Mapping of matchId to array of quick field keys
+    mapping(bytes32 => bytes32[]) public quickFieldKeys;
+
+    /// @notice Total number of results submitted
+    uint256 public totalResults;
+
+    /// @notice Total number of finalized results
+    uint256 public totalFinalized;
+
+    // ============ Events ============
+
     event ResultSubmitted(
         bytes32 indexed matchId,
-        string gameId,
+        bytes32 indexed gameId,
         address indexed submitter,
-        bytes32 resultHash,
-        uint256 disputeDeadline
-    );
-
-    event ResultDisputed(
-        bytes32 indexed matchId,
-        address indexed disputer,
-        uint256 stakeAmount,
-        string reason
-    );
-
-    event DisputeResolved(
-        bytes32 indexed matchId,
-        bool disputeSuccessful,
-        address indexed winner,
-        uint256 reward
+        uint64 submittedAt,
+        uint64 finalizeAfter
     );
 
     event ResultFinalized(
         bytes32 indexed matchId,
-        bytes32 resultHash,
-        uint256 finalizedAt
+        bytes32 indexed gameId,
+        uint64 finalizedAt
     );
 
-    event AutomatedValidationFailed(
+    event ResultQueried(
         bytes32 indexed matchId,
-        string reason
+        address indexed consumer,
+        bool isQuickField,
+        uint256 fee
     );
 
-    constructor(address _gameRegistryAddress) Ownable(msg.sender) {
-        require(_gameRegistryAddress != address(0), "OracleCore: Invalid registry address");
-        gameRegistry = GameRegistry(_gameRegistryAddress);
+    event DisputeInitiated(
+        bytes32 indexed matchId,
+        address indexed challenger,
+        uint256 stakeAmount
+    );
+
+    event QuickFieldAdded(
+        bytes32 indexed matchId,
+        bytes32 indexed fieldHash,
+        bytes32 value
+    );
+
+    // ============ Modifiers ============
+
+    modifier resultExists(bytes32 matchId) {
+        if (results[matchId].submitter == address(0)) revert MatchNotFound();
+        _;
     }
 
+    modifier resultFinalized(bytes32 matchId) {
+        if (!results[matchId].isFinalized) revert ResultNotFinalized();
+        _;
+    }
+
+    // ============ Initialize ============
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address _gameRegistry,
+        address payable _feeManager
+    ) public initializer {
+        __Ownable_init(msg.sender);
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
+
+        gameRegistry = GameRegistry(_gameRegistry);
+        feeManager = FeeManager(_feeManager);
+    }
+
+    // ============ External Functions ============
+
     /**
-     * @notice Submit a game result (called by game developer)
-     * @param _matchId The match this result is for
-     * @param _resultData JSON string with result details
+     * @notice Submit a result for a match with self-describing data
+     * @param matchId The match identifier
+     * @param encodedData Raw encoded result data (any format developer chooses)
+     * @param decodeSchema Human-readable instructions on how to decode the data
+     * @param fieldKeys Array of field names (hashed) for instant access
+     * @param fieldValues Array of field values corresponding to keys
      */
     function submitResult(
-        bytes32 _matchId,
-        string calldata _resultData
+        bytes32 matchId,
+        bytes calldata encodedData,
+        string calldata decodeSchema,
+        bytes32[] calldata fieldKeys,
+        bytes32[] calldata fieldValues
     ) external nonReentrant {
         // Get match details from registry
-        GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
-        require(matchData.scheduledTime > 0, "OracleCore: Match does not exist");
-        require(
-            matchData.status == GameRegistry.MatchStatus.Scheduled ||
-            matchData.status == GameRegistry.MatchStatus.InProgress,
-            "OracleCore: Match not in valid state"
-        );
+        GameRegistry.Match memory matchData = gameRegistry.getMatch(matchId);
+        if (matchData.submitter == address(0)) revert MatchNotFound();
 
-        // Get game details
+        // Verify submitter is the game developer
+        if (matchData.submitter != msg.sender) revert Unauthorized();
+
+        // Verify match time has passed
+        if (block.timestamp < matchData.scheduledTime) revert InvalidMatchTime();
+
+        // Verify result not already submitted
+        if (results[matchId].submitter != address(0)) revert ResultAlreadySubmitted();
+
+        // Verify game is active
         GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
-        require(game.developer == msg.sender, "OracleCore: Only game developer can submit");
-        require(game.isActive, "OracleCore: Game not active");
+        if (!game.isActive || game.isBanned) revert GameNotActive();
 
-        // Ensure result not already submitted
-        require(results[_matchId].submittedAt == 0, "OracleCore: Result already submitted");
-
-        // Compute result hash
-        bytes32 resultHash = keccak256(abi.encodePacked(_resultData, _matchId, block.timestamp));
-
-        // Perform automated validation checks
-        ValidationChecks memory checks = _performValidationChecks(
-            matchData,
-            game,
-            _resultData
-        );
-
-        // Store validation results
-        validations[_matchId] = checks;
-
-        // If critical checks fail, reject immediately
-        if (!checks.authorizedSubmitter || !checks.dataIntegrity) {
-            emit AutomatedValidationFailed(_matchId, "Critical validation failed");
-            revert("OracleCore: Validation failed");
-        }
+        // Verify quick field arrays match
+        require(fieldKeys.length == fieldValues.length, "Field arrays mismatch");
 
         // Store result
-        uint256 disputeDeadline = block.timestamp + DISPUTE_WINDOW;
-        results[_matchId] = GameResult({
-            matchId: _matchId,
-            resultData: _resultData,
-            resultHash: resultHash,
+        results[matchId] = Result({
+            matchId: matchId,
+            gameId: matchData.gameId,
             submitter: msg.sender,
-            submittedAt: block.timestamp,
-            disputeDeadline: disputeDeadline,
+            encodedData: encodedData,
+            decodeSchema: decodeSchema,
+            submittedAt: uint64(block.timestamp),
+            finalizedAt: 0,
             isFinalized: false,
-            isDisputed: false,
-            disputer: address(0),
-            disputeStake: 0,
-            disputeReason: ""
+            isDisputed: false
         });
 
-        allResults.push(_matchId);
+        // Store quick-access fields
+        for (uint256 i = 0; i < fieldKeys.length; i++) {
+            quickFields[matchId][fieldKeys[i]] = fieldValues[i];
+            quickFieldKeys[matchId].push(fieldKeys[i]);
 
-        // Update match status in registry
-        gameRegistry.updateMatchStatus(_matchId, GameRegistry.MatchStatus.Completed);
+            emit QuickFieldAdded(matchId, fieldKeys[i], fieldValues[i]);
+        }
+
+        totalResults++;
+
+        // Mark result as submitted in registry
+        gameRegistry.markResultSubmitted(matchId);
+
+        uint64 finalizeAfter = uint64(block.timestamp + DISPUTE_WINDOW);
 
         emit ResultSubmitted(
-            _matchId,
+            matchId,
             matchData.gameId,
             msg.sender,
-            resultHash,
-            disputeDeadline
+            uint64(block.timestamp),
+            finalizeAfter
         );
     }
 
     /**
-     * @notice Dispute a submitted result (anyone can dispute with stake)
-     * @param _matchId The match result to dispute
-     * @param _reason Explanation for the dispute
+     * @notice Finalize a result after dispute window expires
+     * @param matchId The match identifier
      */
-    function disputeResult(
-        bytes32 _matchId,
-        string calldata _reason
-    ) external payable nonReentrant {
-        GameResult storage result = results[_matchId];
-        require(result.submittedAt > 0, "OracleCore: Result does not exist");
-        require(!result.isFinalized, "OracleCore: Result already finalized");
-        require(!result.isDisputed, "OracleCore: Already disputed");
-        require(block.timestamp < result.disputeDeadline, "OracleCore: Dispute window closed");
-        require(msg.value == DISPUTE_STAKE, "OracleCore: Incorrect dispute stake");
-        require(bytes(_reason).length > 0, "OracleCore: Must provide reason");
+    function finalizeResult(bytes32 matchId) external resultExists(matchId) {
+        Result storage result = results[matchId];
 
-        result.isDisputed = true;
-        result.disputer = msg.sender;
-        result.disputeStake = msg.value;
-        result.disputeReason = _reason;
+        if (result.isFinalized) return; // Already finalized
 
-        // Update match status in registry
-        gameRegistry.updateMatchStatus(_matchId, GameRegistry.MatchStatus.Disputed);
+        // Check if dispute window has passed
+        if (block.timestamp < result.submittedAt + DISPUTE_WINDOW) {
+            revert DisputeWindowActive();
+        }
 
-        emit ResultDisputed(_matchId, msg.sender, msg.value, _reason);
+        result.isFinalized = true;
+        result.finalizedAt = uint64(block.timestamp);
+        totalFinalized++;
+
+        emit ResultFinalized(matchId, result.gameId, uint64(block.timestamp));
     }
 
     /**
-     * @notice Resolve a dispute (called by owner/governance)
-     * @param _matchId The disputed match
-     * @param _disputeValid Whether the dispute is valid
+     * @notice Query a quick-access field from a finalized result
+     * @param matchId The match identifier
+     * @param fieldHash Hash of the field name (keccak256 of field name string)
+     * @return The field value as bytes32
      */
-    function resolveDispute(
-        bytes32 _matchId,
-        bool _disputeValid
-    ) external onlyOwner nonReentrant {
-        GameResult storage result = results[_matchId];
-        require(result.isDisputed, "OracleCore: Not disputed");
-        require(!result.isFinalized, "OracleCore: Already finalized");
+    function getResultField(bytes32 matchId, bytes32 fieldHash)
+        external
+        resultExists(matchId)
+        resultFinalized(matchId)
+        returns (bytes32)
+    {
+        bytes32 value = quickFields[matchId][fieldHash];
+        if (value == bytes32(0)) revert FieldNotFound();
 
-        GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
-        GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
+        // Charge query fee
+        feeManager.chargeQueryFee(msg.sender, results[matchId].gameId);
 
-        if (_disputeValid) {
-            // Dispute successful: Disputer wins
-            // Disputer gets their stake back + 50% of game's stake
-            uint256 reward = result.disputeStake + (gameRegistry.REGISTRATION_STAKE() / 2);
-            disputerRewards[result.disputer] += reward;
+        emit ResultQueried(matchId, msg.sender, true, feeManager.queryFee());
 
-            // Slash game developer's stake
-            gameRegistry.slashStake(
-                matchData.gameId,
-                gameRegistry.REGISTRATION_STAKE() / 2,
-                result.disputeReason
-            );
+        return value;
+    }
 
-            // Update reputation (decrease by 50 points, minimum 0)
-            uint256 newReputation = game.reputationScore > 50
-                ? game.reputationScore - 50
-                : 0;
-            gameRegistry.updateReputation(matchData.gameId, newReputation);
+    /**
+     * @notice Get full result data with decode instructions
+     * @param matchId The match identifier
+     * @return encodedData The raw encoded result data
+     * @return decodeSchema Instructions on how to decode the data
+     * @return isFinalized Whether the result is finalized
+     */
+    function getFullResult(bytes32 matchId)
+        external
+        resultExists(matchId)
+        resultFinalized(matchId)
+        returns (bytes memory encodedData, string memory decodeSchema, bool isFinalized)
+    {
+        Result memory result = results[matchId];
 
-            emit DisputeResolved(_matchId, true, result.disputer, reward);
+        // Charge query fee
+        feeManager.chargeQueryFee(msg.sender, result.gameId);
 
-            // Mark result as invalid (stays in disputed state)
-            gameRegistry.updateMatchStatus(_matchId, GameRegistry.MatchStatus.Disputed);
-        } else {
-            // Dispute failed: Original submitter wins
-            // Game developer gets the dispute stake
-            disputerRewards[result.submitter] += result.disputeStake;
+        emit ResultQueried(matchId, msg.sender, false, feeManager.queryFee());
 
-            // Update reputation (increase by 10 points, maximum 1000)
-            uint256 newReputation = game.reputationScore < 990
-                ? game.reputationScore + 10
-                : 1000;
-            gameRegistry.updateReputation(matchData.gameId, newReputation);
+        return (result.encodedData, result.decodeSchema, result.isFinalized);
+    }
 
-            emit DisputeResolved(_matchId, false, result.submitter, result.disputeStake);
+    /**
+     * @notice Get all quick-access field keys for a match
+     * @param matchId The match identifier
+     * @return Array of field hashes
+     */
+    function getQuickFieldKeys(bytes32 matchId)
+        external
+        view
+        resultExists(matchId)
+        returns (bytes32[] memory)
+    {
+        return quickFieldKeys[matchId];
+    }
 
-            // Finalize the result
-            result.isFinalized = true;
-            gameRegistry.updateMatchStatus(_matchId, GameRegistry.MatchStatus.Finalized);
+    /**
+     * @notice Peek at a quick field value without charging (for preview/validation)
+     * @param matchId The match identifier
+     * @param fieldHash Hash of the field name
+     * @return The field value
+     */
+    function peekResultField(bytes32 matchId, bytes32 fieldHash)
+        external
+        view
+        resultExists(matchId)
+        returns (bytes32)
+    {
+        return quickFields[matchId][fieldHash];
+    }
 
-            emit ResultFinalized(_matchId, result.resultHash, block.timestamp);
+    /**
+     * @notice Check if a result can be finalized
+     * @param matchId The match identifier
+     * @return canFinalize Whether the result can be finalized now
+     */
+    function canFinalize(bytes32 matchId)
+        external
+        view
+        resultExists(matchId)
+        returns (bool)
+    {
+        Result memory result = results[matchId];
+        return !result.isFinalized &&
+               block.timestamp >= result.submittedAt + DISPUTE_WINDOW;
+    }
+
+    /**
+     * @notice Get result details
+     * @param matchId The match identifier
+     */
+    function getResult(bytes32 matchId)
+        external
+        view
+        resultExists(matchId)
+        returns (Result memory)
+    {
+        return results[matchId];
+    }
+
+    /**
+     * @notice Batch finalize multiple results
+     * @param matchIds Array of match identifiers to finalize
+     */
+    function batchFinalizeResults(bytes32[] calldata matchIds) external {
+        for (uint256 i = 0; i < matchIds.length; i++) {
+            bytes32 matchId = matchIds[i];
+            Result storage result = results[matchId];
+
+            if (result.submitter != address(0) &&
+                !result.isFinalized &&
+                block.timestamp >= result.submittedAt + DISPUTE_WINDOW) {
+
+                result.isFinalized = true;
+                result.finalizedAt = uint64(block.timestamp);
+                totalFinalized++;
+
+                emit ResultFinalized(matchId, result.gameId, uint64(block.timestamp));
+            }
         }
     }
 
+    // ============ Admin Functions ============
+
     /**
-     * @notice Finalize a result after dispute window (anyone can call)
-     * @param _matchId The match to finalize
+     * @notice Mark a result as disputed (called by DisputeResolver)
+     * @param matchId The match identifier
      */
-    function finalizeResult(bytes32 _matchId) external nonReentrant {
-        GameResult storage result = results[_matchId];
-        require(result.submittedAt > 0, "OracleCore: Result does not exist");
-        require(!result.isFinalized, "OracleCore: Already finalized");
-        require(!result.isDisputed, "OracleCore: Cannot finalize disputed result");
-        require(
-            block.timestamp >= result.disputeDeadline,
-            "OracleCore: Dispute window not closed"
-        );
-
-        result.isFinalized = true;
-
-        // Update match status in registry
-        gameRegistry.updateMatchStatus(_matchId, GameRegistry.MatchStatus.Finalized);
-
-        // Update reputation (small increase for successful submission)
-        GameRegistry.Match memory matchData = gameRegistry.getMatch(_matchId);
-        GameRegistry.Game memory game = gameRegistry.getGame(matchData.gameId);
-
-        uint256 newReputation = game.reputationScore < 995
-            ? game.reputationScore + 5
-            : 1000;
-        gameRegistry.updateReputation(matchData.gameId, newReputation);
-
-        emit ResultFinalized(_matchId, result.resultHash, block.timestamp);
+    function markResultDisputed(bytes32 matchId) external onlyOwner resultExists(matchId) {
+        results[matchId].isDisputed = true;
     }
 
     /**
-     * @notice Withdraw accumulated rewards from successful disputes
+     * @notice Update GameRegistry address
+     * @param _gameRegistry New GameRegistry address
      */
-    function withdrawRewards() external nonReentrant {
-        uint256 amount = disputerRewards[msg.sender];
-        require(amount > 0, "OracleCore: No rewards to withdraw");
-
-        disputerRewards[msg.sender] = 0;
-        payable(msg.sender).transfer(amount);
+    function updateGameRegistry(address _gameRegistry) external onlyOwner {
+        gameRegistry = GameRegistry(_gameRegistry);
     }
 
     /**
-     * @notice Get finalized result for a match (used by prediction markets)
-     * @param _matchId The match to query
-     * @return resultData The result data
-     * @return resultHash Hash for verification
-     * @return isFinalized Whether result is finalized
+     * @notice Update FeeManager address
+     * @param _feeManager New FeeManager address
      */
-    function getResult(bytes32 _matchId)
-        external
-        view
-        returns (
-            string memory resultData,
-            bytes32 resultHash,
-            bool isFinalized
-        )
-    {
-        GameResult memory result = results[_matchId];
-        return (result.resultData, result.resultHash, result.isFinalized);
+    function updateFeeManager(address payable _feeManager) external onlyOwner {
+        feeManager = FeeManager(_feeManager);
     }
+
+    // ============ Internal Functions ============
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // ============ Helper Functions ============
 
     /**
-     * @notice Check if a result is available and finalized
-     * @param _matchId The match to check
+     * @notice Helper to compute field hash from string
+     * @param fieldName The field name as string
+     * @return The keccak256 hash of the field name
      */
-    function isResultFinalized(bytes32 _matchId) external view returns (bool) {
-        return results[_matchId].isFinalized;
+    function computeFieldHash(string calldata fieldName) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(fieldName));
     }
-
-    /**
-     * @notice Get validation checks for a result
-     * @param _matchId The match to check
-     */
-    function getValidationChecks(bytes32 _matchId)
-        external
-        view
-        returns (ValidationChecks memory)
-    {
-        return validations[_matchId];
-    }
-
-    // Internal functions
-
-    /**
-     * @notice Perform automated validation checks on result
-     */
-    function _performValidationChecks(
-        GameRegistry.Match memory _match,
-        GameRegistry.Game memory _game,
-        string calldata _resultData
-    ) internal view returns (ValidationChecks memory) {
-        return ValidationChecks({
-            timingValid: block.timestamp >= _match.scheduledTime,
-            authorizedSubmitter: _game.developer == msg.sender,
-            dataIntegrity: bytes(_resultData).length > 0,
-            noImpossibleValues: true  // Could add more sophisticated checks
-        });
-    }
-
-    /**
-     * @notice Get total number of results
-     */
-    function getTotalResults() external view returns (uint256) {
-        return allResults.length;
-    }
-
-    /**
-     * @notice Update dispute window (governance function)
-     * @param _newWindow New dispute window in seconds
-     */
-    function updateDisputeWindow(uint256 _newWindow) external onlyOwner {
-        require(_newWindow >= 5 minutes, "OracleCore: Window too short");
-        require(_newWindow <= 24 hours, "OracleCore: Window too long");
-        // Note: This would need to be implemented as a state variable
-        // For simplicity, keeping as constant for now
-    }
-
-    // Emergency functions
-
-    /**
-     * @notice Emergency pause (in case of critical bug)
-     */
-    function emergencyWithdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
-    }
-
-    receive() external payable {}
 }
