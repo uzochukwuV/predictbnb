@@ -1,0 +1,21 @@
+{
+  "name": "predictbnb-subgraph",
+  "version": "1.0.0",
+  "description": "PredictBNB Gaming Oracle Subgraph",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --studio predictbnb-subgraph",
+    "deploy:testnet": "graph deploy --node https://api.thegraph.com/deploy/ --ipfs https://api.thegraph.com/ipfs/ predictbnb/predictbnb-bsc-testnet",
+    "create-local": "graph create --node http://localhost:8020/ predictbnb/predictbnb",
+    "remove-local": "graph remove --node http://localhost:8020/ predictbnb/predictbnb",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 predictbnb/predictbnb"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.67.0",
+    "@graphprotocol/graph-ts": "^0.32.0"
+  },
+  "devDependencies": {
+    "matchstick-as": "^0.6.0"
+  }
+}

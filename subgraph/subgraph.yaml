@@ -1,0 +1,134 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  # GameRegistry Contract
+  - kind: ethereum
+    name: GameRegistry
+    network: bsc # Change to bsc-testnet for testnet
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with deployed address
+      abi: GameRegistry
+      startBlock: 0 # Replace with deployment block number
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Game
+        - Match
+      abis:
+        - name: GameRegistry
+          file: ./abis/GameRegistry.json
+      eventHandlers:
+        - event: GameRegistered(indexed bytes32,indexed address,string,uint256,uint64)
+          handler: handleGameRegistered
+        - event: MatchScheduled(indexed bytes32,indexed bytes32,indexed address,uint64,string)
+          handler: handleMatchScheduled
+        - event: StakeIncreased(indexed bytes32,indexed address,uint256,uint256)
+          handler: handleStakeIncreased
+        - event: StakeSlashed(indexed bytes32,uint256,uint256,string)
+          handler: handleStakeSlashed
+        - event: ReputationUpdated(indexed bytes32,uint16,uint16)
+          handler: handleReputationUpdated
+        - event: GameDeactivated(indexed bytes32,string)
+          handler: handleGameDeactivated
+        - event: GameBanned(indexed bytes32,string)
+          handler: handleGameBanned
+        - event: ResultSubmitted(indexed bytes32,indexed bytes32)
+          handler: handleMatchResultSubmitted
+      file: ./src/game-registry.ts
+
+  # OracleCore Contract
+  - kind: ethereum
+    name: OracleCore
+    network: bsc
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with deployed address
+      abi: OracleCore
+      startBlock: 0 # Replace with deployment block number
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Result
+        - QuickField
+        - Query
+      abis:
+        - name: OracleCore
+          file: ./abis/OracleCore.json
+        - name: GameRegistry
+          file: ./abis/GameRegistry.json
+      eventHandlers:
+        - event: ResultSubmitted(indexed bytes32,indexed bytes32,indexed address,uint64,uint64)
+          handler: handleResultSubmitted
+        - event: ResultFinalized(indexed bytes32,indexed bytes32,uint64)
+          handler: handleResultFinalized
+        - event: ResultQueried(indexed bytes32,indexed address,bool,uint256)
+          handler: handleResultQueried
+        - event: QuickFieldAdded(indexed bytes32,indexed bytes32,bytes32)
+          handler: handleQuickFieldAdded
+        - event: DisputeInitiated(indexed bytes32,indexed address,uint256)
+          handler: handleDisputeInitiated
+      file: ./src/oracle-core.ts
+
+  # FeeManager Contract
+  - kind: ethereum
+    name: FeeManager
+    network: bsc
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with deployed address
+      abi: FeeManager
+      startBlock: 0 # Replace with deployment block number
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - GameEarnings
+        - ConsumerBalance
+        - ProtocolStats
+      abis:
+        - name: FeeManager
+          file: ./abis/FeeManager.json
+      eventHandlers:
+        - event: BalanceDeposited(indexed address,uint256,uint256,uint8)
+          handler: handleBalanceDeposited
+        - event: QueryFeeCharged(indexed address,indexed bytes32,uint256,bool)
+          handler: handleQueryFeeCharged
+        - event: RevenueDistributed(indexed bytes32,uint256,uint256,uint256)
+          handler: handleRevenueDistributed
+        - event: EarningsWithdrawn(indexed bytes32,indexed address,uint256)
+          handler: handleEarningsWithdrawn
+        - event: FreeTierReset(indexed address,uint64)
+          handler: handleFreeTierReset
+      file: ./src/fee-manager.ts
+
+  # DisputeResolver Contract
+  - kind: ethereum
+    name: DisputeResolver
+    network: bsc
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with deployed address
+      abi: DisputeResolver
+      startBlock: 0 # Replace with deployment block number
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Dispute
+      abis:
+        - name: DisputeResolver
+          file: ./abis/DisputeResolver.json
+      eventHandlers:
+        - event: DisputeCreated(indexed bytes32,indexed bytes32,indexed bytes32,address,uint256,string)
+          handler: handleDisputeCreated
+        - event: DisputeResolved(indexed bytes32,indexed bytes32,uint8,address,uint64)
+          handler: handleDisputeResolved
+        - event: EvidenceSubmitted(indexed bytes32,bytes32)
+          handler: handleEvidenceSubmitted
+      file: ./src/dispute-resolver.ts

@@ -1,0 +1,160 @@
+"""
+PredictBNB Gaming Oracle Subgraph Schema
+"""
+
+type Game @entity {
+  id: ID! # gameId (bytes32)
+  developer: Bytes! # address
+  name: String!
+  metadata: String!
+  stakedAmount: BigInt!
+  reputation: Int!
+  registeredAt: BigInt!
+  totalMatches: Int!
+  totalDisputes: Int!
+  isActive: Boolean!
+  isBanned: Boolean!
+
+  # Relations
+  matches: [Match!]! @derivedFrom(field: "game")
+  results: [Result!]! @derivedFrom(field: "game")
+  earnings: GameEarnings
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type Match @entity {
+  id: ID! # matchId (bytes32)
+  game: Game!
+  scheduledTime: BigInt!
+  metadata: String!
+  submitter: Bytes! # address
+  hasResult: Boolean!
+
+  # Relations
+  result: Result
+
+  # Timestamps
+  createdAt: BigInt!
+}
+
+type Result @entity {
+  id: ID! # matchId (bytes32)
+  match: Match!
+  game: Game!
+  submitter: Bytes! # address
+  encodedData: Bytes!
+  decodeSchema: String!
+  submittedAt: BigInt!
+  finalizedAt: BigInt
+  isFinalized: Boolean!
+  isDisputed: Boolean!
+
+  # Relations
+  quickFields: [QuickField!]! @derivedFrom(field: "result")
+  dispute: Dispute
+
+  # Timestamps
+  createdAt: BigInt!
+}
+
+type QuickField @entity {
+  id: ID! # matchId-fieldHash
+  result: Result!
+  fieldHash: Bytes!
+  fieldValue: Bytes!
+
+  # Timestamps
+  createdAt: BigInt!
+}
+
+type GameEarnings @entity {
+  id: ID! # gameId
+  game: Game!
+  totalEarned: BigInt!
+  withdrawn: BigInt!
+  pendingEarnings: BigInt!
+  totalQueries: Int!
+
+  # Timestamps
+  updatedAt: BigInt!
+}
+
+type Query @entity {
+  id: ID! # tx hash + log index
+  consumer: Bytes! # address
+  result: Result!
+  game: Game!
+  isQuickField: Boolean!
+  fee: BigInt!
+
+  # Timestamps
+  timestamp: BigInt!
+}
+
+type Dispute @entity {
+  id: ID! # disputeId (bytes32)
+  match: Match!
+  result: Result!
+  game: Game!
+  challenger: Bytes! # address
+  stakeAmount: BigInt!
+  status: DisputeStatus!
+  reason: String!
+  evidenceHash: Bytes!
+  resolver: Bytes # address
+
+  # Timestamps
+  createdAt: BigInt!
+  resolvedAt: BigInt
+}
+
+enum DisputeStatus {
+  Pending
+  Accepted
+  Rejected
+  Investigating
+}
+
+type ConsumerBalance @entity {
+  id: ID! # consumer address
+  consumer: Bytes! # address
+  depositedAmount: BigInt!
+  creditAmount: BigInt!
+  queriesUsed: Int!
+  freeQueriesUsed: Int!
+  bonusTier: Int!
+
+  # Timestamps
+  lastResetTime: BigInt!
+  updatedAt: BigInt!
+}
+
+type ProtocolStats @entity {
+  id: ID! # singleton: "protocol"
+  totalGames: Int!
+  totalMatches: Int!
+  totalResults: Int!
+  totalQueries: BigInt!
+  totalRevenue: BigInt!
+  protocolBalance: BigInt!
+  disputerPoolBalance: BigInt!
+
+  # Timestamps
+  updatedAt: BigInt!
+}
+
+type DailyStats @entity {
+  id: ID! # day timestamp
+  date: BigInt!
+  gamesRegistered: Int!
+  matchesScheduled: Int!
+  resultsSubmitted: Int!
+  queriesMade: Int!
+  revenue: BigInt!
+
+  # Timestamps
+  timestamp: BigInt!
+}

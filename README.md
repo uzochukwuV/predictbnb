@@ -1,5 +1,5 @@
 # PredictBNB - Gaming Oracle Infrastructure
-
+npm install -g @graphprotocol/graph-cli
 > **A decentralized gaming oracle for on-chain prediction markets on BNB Chain**
 
 PredictBNB is a specialized oracle network for gaming results that enables game developers to monetize their data while providing prediction markets with fast, verified game outcomes.
