@@ -284,7 +284,7 @@ contract DisputeResolver is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPS
 
             // Challenger loses stake - add to disputer pool
             // (This incentivizes only valid disputes)
-            feeManager.payDisputerReward(address(feeManager), dispute.stakeAmount);
+            feeManager.addToDisputerPool{value: dispute.stakeAmount}();
 
             // Increase game reputation slightly for false accusation
             GameRegistry.Game memory game = gameRegistry.getGame(dispute.gameId);

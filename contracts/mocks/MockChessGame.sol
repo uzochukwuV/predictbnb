@@ -16,6 +16,7 @@ contract MockChessGame {
     GameRegistry public gameRegistry;
     OracleCore public oracleCore;
 
+    address public owner;
     bytes32 public gameId;
     uint256 public matchCounter;
 
@@ -33,9 +34,15 @@ contract MockChessGame {
     event MatchCreated(bytes32 indexed matchId, address player1, address player2);
     event MatchCompleted(bytes32 indexed matchId, address winner, uint256 moves);
 
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+
     constructor(address _gameRegistry, address _oracleCore) {
         gameRegistry = GameRegistry(_gameRegistry);
         oracleCore = OracleCore(_oracleCore);
+        owner = msg.sender;
     }
 
     /**
@@ -94,7 +101,7 @@ contract MockChessGame {
         address winner,
         uint256 moves,
         uint256 duration
-    ) external {
+    ) external onlyOwner {
         ChessMatch storage chessMatch = matches[matchId];
         require(chessMatch.matchId != bytes32(0), "Match not found");
         require(!chessMatch.isCompleted, "Match already completed");

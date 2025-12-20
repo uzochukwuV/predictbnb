@@ -69,6 +69,9 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /// @notice Reference to DisputeResolver contract
     address public disputeResolver;
 
+    /// @notice Reference to OracleCore contract
+    address public oracleCore;
+
     /// @notice Consumer prepaid balances
     mapping(address => ConsumerBalance) public consumerBalances;
 
@@ -182,6 +185,7 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param gameId The game being queried
      */
     function chargeQueryFee(address consumer, bytes32 gameId) external nonReentrant {
+        if (msg.sender != oracleCore && msg.sender != owner()) revert Unauthorized();
         // Reset free tier if new day
         _resetFreeTierIfNeeded(consumer);
 
@@ -253,6 +257,14 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         if (!success) revert TransferFailed();
 
         emit ProtocolBalanceWithdrawn(recipient, amount);
+    }
+
+    /**
+     * @notice Add funds to disputer pool (called when dispute is rejected)
+     */
+    function addToDisputerPool() external payable nonReentrant {
+        if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
+        disputerPoolBalance += msg.value;
     }
 
     /**
@@ -356,6 +368,14 @@ contract FeeManager is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function updateDisputeResolver(address _disputeResolver) external onlyOwner {
         disputeResolver = _disputeResolver;
+    }
+
+    /**
+     * @notice Update OracleCore address
+     * @param _oracleCore New OracleCore address
+     */
+    function updateOracleCore(address _oracleCore) external onlyOwner {
+        oracleCore = _oracleCore;
     }
 
     // ============ Internal Functions ============

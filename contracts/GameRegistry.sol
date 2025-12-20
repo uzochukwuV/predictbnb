@@ -67,6 +67,9 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     /// @notice Reference to DisputeResolver contract
     address public disputeResolver;
 
+    /// @notice Reference to OracleCore contract
+    address public oracleCore;
+
     /// @notice Mapping to check if a developer has registered a game
     mapping(address => bytes32[]) public developerGames;
 
@@ -247,7 +250,7 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @param matchId The match identifier
      */
     function markResultSubmitted(bytes32 matchId) external {
-        // TODO: Add access control - only OracleCore should call this
+        if (msg.sender != oracleCore && msg.sender != owner()) revert Unauthorized();
         if (matches[matchId].submitter == address(0)) revert MatchNotFound();
         matches[matchId].hasResult = true;
 
@@ -276,8 +279,8 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
         game.stakedAmount -= slashAmount;
 
-        // Send slashed amount to protocol treasury (owner)
-        (bool success, ) = payable(owner()).call{value: slashAmount}("");
+        // Send slashed amount to caller (DisputeResolver) for distribution
+        (bool success, ) = payable(msg.sender).call{value: slashAmount}("");
         require(success, "Transfer failed");
 
         emit StakeSlashed(gameId, slashAmount, game.stakedAmount, reason);
@@ -311,7 +314,8 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @notice Increment dispute counter for a game
      * @param gameId The game identifier
      */
-    function incrementDisputes(bytes32 gameId) external onlyOwner gameExists(gameId) {
+    function incrementDisputes(bytes32 gameId) external gameExists(gameId) {
+        if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
         games[gameId].totalDisputes++;
     }
 
@@ -345,6 +349,14 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      */
     function updateDisputeResolver(address _disputeResolver) external onlyOwner {
         disputeResolver = _disputeResolver;
+    }
+
+    /**
+     * @notice Update OracleCore address
+     * @param _oracleCore New OracleCore address
+     */
+    function updateOracleCore(address _oracleCore) external onlyOwner {
+        oracleCore = _oracleCore;
     }
 
     // ============ View Functions ============

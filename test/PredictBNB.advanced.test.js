@@ -49,10 +49,12 @@ describe("PredictBNB Advanced Tests", function () {
     );
     await disputeResolver.waitForDeployment();
 
-    // Connect all contracts to DisputeResolver
+    // Connect all contracts together
     await oracleCore.updateDisputeResolver(await disputeResolver.getAddress());
     await gameRegistry.updateDisputeResolver(await disputeResolver.getAddress());
+    await gameRegistry.updateOracleCore(await oracleCore.getAddress());
     await feeManager.updateDisputeResolver(await disputeResolver.getAddress());
+    await feeManager.updateOracleCore(await oracleCore.getAddress());
 
     // Add resolver
     await disputeResolver.addResolver(resolver.address);

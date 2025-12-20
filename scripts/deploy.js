@@ -68,12 +68,14 @@ async function main() {
   console.log("✅ DisputeResolver deployed to:", disputeResolverAddress);
   console.log("   Challenge stake:", hre.ethers.formatEther(CHALLENGE_STAKE), "BNB");
 
-  // 4.1. Connect all contracts to DisputeResolver
-  console.log("\n🔗 Connecting contracts to DisputeResolver...");
+  // 4.1. Connect all contracts together
+  console.log("\n🔗 Connecting contract references...");
   await oracleCore.updateDisputeResolver(disputeResolverAddress);
   await gameRegistry.updateDisputeResolver(disputeResolverAddress);
+  await gameRegistry.updateOracleCore(oracleCoreAddress);
   await feeManager.updateDisputeResolver(disputeResolverAddress);
-  console.log("✅ All contracts connected to DisputeResolver:", disputeResolverAddress);
+  await feeManager.updateOracleCore(oracleCoreAddress);
+  console.log("✅ All contracts connected");
 
   // 5. Deploy SimplePredictionMarket (Example)
   console.log("\n🎲 Deploying SimplePredictionMarket (Example)...");

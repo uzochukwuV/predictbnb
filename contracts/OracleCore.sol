@@ -59,9 +59,6 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /// @notice Mapping of matchId to quick-access fields (fieldHash => value)
     mapping(bytes32 => mapping(bytes32 => bytes32)) public quickFields;
 
-    /// @notice Mapping of matchId to array of quick field keys
-    mapping(bytes32 => bytes32[]) public quickFieldKeys;
-
     /// @notice Total number of results submitted
     uint256 public totalResults;
 
@@ -101,6 +98,12 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         bytes32 indexed matchId,
         bytes32 indexed fieldHash,
         bytes32 value
+    );
+
+    event QuickFieldsSet(
+        bytes32 indexed matchId,
+        bytes32[] fieldKeys,
+        bytes32[] fieldValues
     );
 
     // ============ Modifiers ============
@@ -187,9 +190,12 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         // Store quick-access fields
         for (uint256 i = 0; i < fieldKeys.length; i++) {
             quickFields[matchId][fieldKeys[i]] = fieldValues[i];
-            quickFieldKeys[matchId].push(fieldKeys[i]);
-
             emit QuickFieldAdded(matchId, fieldKeys[i], fieldValues[i]);
+        }
+
+        // Emit comprehensive event for indexers (e.g., subgraph)
+        if (fieldKeys.length > 0) {
+            emit QuickFieldsSet(matchId, fieldKeys, fieldValues);
         }
 
         totalResults++;
@@ -276,20 +282,6 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     }
 
     /**
-     * @notice Get all quick-access field keys for a match
-     * @param matchId The match identifier
-     * @return Array of field hashes
-     */
-    function getQuickFieldKeys(bytes32 matchId)
-        external
-        view
-        resultExists(matchId)
-        returns (bytes32[] memory)
-    {
-        return quickFieldKeys[matchId];
-    }
-
-    /**
      * @notice Peek at a quick field value without charging (for preview/validation)
      * @param matchId The match identifier
      * @param fieldHash Hash of the field name
@@ -335,9 +327,11 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
 
     /**
      * @notice Batch finalize multiple results
-     * @param matchIds Array of match identifiers to finalize
+     * @param matchIds Array of match identifiers to finalize (max 50)
      */
     function batchFinalizeResults(bytes32[] calldata matchIds) external {
+        require(matchIds.length <= 50, "Batch size too large");
+
         for (uint256 i = 0; i < matchIds.length; i++) {
             bytes32 matchId = matchIds[i];
             Result storage result = results[matchId];
