@@ -196,17 +196,17 @@ export default function PredictionMarketPage() {
   const calculatePotentialWinnings = (): string => {
     if (!market || !betAmount || !selectedOutcome) return "0.0000"
 
-    let pool = 0n
+    let pool = BigInt(0)
     if (selectedOutcome === market.player1) pool = market.player1Pool
     else if (selectedOutcome === market.player2) pool = market.player2Pool
     else pool = market.tiePool
 
-    if (pool === 0n) return "0.0000"
+    if (pool === BigInt(0)) return "0.0000"
 
     const amount = BigInt(Math.floor(parseFloat(betAmount) * 1e18))
     const totalPool = market.totalPool + amount
     const winningPool = pool + amount
-    const platformFee = (totalPool * 200n) / 10000n
+    const platformFee = (totalPool * BigInt(200)) / BigInt(10000) // 2% fee
     const payoutPool = totalPool - platformFee
 
     const winnings = (amount * payoutPool) / winningPool
@@ -219,7 +219,7 @@ export default function PredictionMarketPage() {
   }
 
   const getTotalStaked = (): string => {
-    const total = userBets.reduce((sum, bet) => sum + bet.amount, 0n)
+    const total = userBets.reduce((sum, bet) => sum + bet.amount, BigInt(0))
     return formatBNB(total)
   }
 
@@ -352,7 +352,7 @@ export default function PredictionMarketPage() {
               {activeTab === "live" ? "Live Markets" : "Finished Markets"}
             </h2>
 
-            {marketCounter === undefined || marketCounter === 0n ? (
+            {marketCounter === undefined || marketCounter === BigInt(0) ? (
               <div className="border border-border bg-background/50 p-8 text-center">
                 <p className="font-mono text-sm text-muted-foreground">No markets available</p>
               </div>

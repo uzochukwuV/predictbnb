@@ -91,8 +91,8 @@ export default function RPSGamePage() {
   }
 
   const currentMatch = parseMatch(matchData)
-  const wins = playerStats ? Number(playerStats[0]) : 0
-  const totalMatches = playerStats ? Number(playerStats[1]) : 0
+  const wins = playerStats ? Number((playerStats as any)[0]) : 0
+  const totalMatches = playerStats ? Number((playerStats as any)[1]) : 0
 
   // Countdown timer
   useEffect(() => {

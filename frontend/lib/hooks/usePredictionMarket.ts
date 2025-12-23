@@ -248,7 +248,7 @@ export function formatBNB(wei: bigint): string {
 }
 
 export function calculateOddsDisplay(totalPool: bigint, specificPool: bigint): string {
-  if (specificPool === 0n) return '0.00x'
+  if (specificPool === BigInt(0)) return '0.00x'
   const odds = Number(totalPool) / Number(specificPool)
   return `${odds.toFixed(2)}x`
 }
@@ -259,9 +259,9 @@ export function calculatePotentialPayout(
   winningPool: bigint,
   platformFeeBps: bigint
 ): bigint {
-  if (winningPool === 0n) return 0n
+  if (winningPool === BigInt(0)) return BigInt(0)
 
-  const platformFee = (totalPool * platformFeeBps) / 10000n
+  const platformFee = (totalPool * platformFeeBps) / BigInt(10000)
   const payoutPool = totalPool - platformFee
 
   return (betAmount * payoutPool) / winningPool
