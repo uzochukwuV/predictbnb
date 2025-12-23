@@ -1,0 +1,1187 @@
+{
+  "manifestVersion": "3.2",
+  "proxies": [
+    {
+      "address": "0xC9F0faED201b8079D35b6017FE0E14195985AC01",
+      "txHash": "0xd9dc815575c8143eb8195fbffe97bef3bbaf53651e406b6b30a88fded64d27e2",
+      "kind": "uups"
+    },
+    {
+      "address": "0x2c03a7Ea490Ad7aec66276EEdA583e7F6293a54d",
+      "txHash": "0x43744bcf05aed4acd3953a1f853914edf5d3b606a934b73c2e24091073ee50f4",
+      "kind": "uups"
+    },
+    {
+      "address": "0xA5BE322eb075F9A8Ac257b5DD1B6cD845F2aC815",
+      "txHash": "0x5514e7dc1239c05f7fa4c1ddb7e77f3fbc7c96ef570b1bd24cdfd8f8958791f2",
+      "kind": "uups"
+    },
+    {
+      "address": "0x9427460958C08Ff8961fce686Cf4D4f365dCF298",
+      "txHash": "0x7756f13957fce4f14bac25c9a368b9eb02bc70c154165b4ae216c22feb4eb92a",
+      "kind": "uups"
+    }
+  ],
+  "impls": {
+    "57bd0e5bb4b8f56a37b1ffe94e124be5d518482312280c769c6f89439d865833": {
+      "address": "0x9326e8AEC03cFfb5e7D7a6f431396BeB31fdDF15",
+      "txHash": "0xf9464ca72c83048efd58b277cd1ea55d3c90dd7d52d4837fee78482405ea026c",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "minimumStake",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:53"
+          },
+          {
+            "label": "games",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_bytes32,t_struct(Game)2611_storage)",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:56"
+          },
+          {
+            "label": "matches",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_bytes32,t_struct(Match)2624_storage)",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:59"
+          },
+          {
+            "label": "totalGames",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint256",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:62"
+          },
+          {
+            "label": "totalMatches",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_uint256",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:65"
+          },
+          {
+            "label": "disputeResolver",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_address",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:68"
+          },
+          {
+            "label": "oracleCore",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_address",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:71"
+          },
+          {
+            "label": "developerGames",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_address,t_array(t_bytes32)dyn_storage)",
+            "contract": "GameRegistry",
+            "src": "contracts\\GameRegistry.sol:74"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)226_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_bytes32)dyn_storage": {
+            "label": "bytes32[]",
+            "numberOfBytes": "32"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_array(t_bytes32)dyn_storage)": {
+            "label": "mapping(address => bytes32[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(Game)2611_storage)": {
+            "label": "mapping(bytes32 => struct GameRegistry.Game)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(Match)2624_storage)": {
+            "label": "mapping(bytes32 => struct GameRegistry.Match)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Game)2611_storage": {
+            "label": "struct GameRegistry.Game",
+            "members": [
+              {
+                "label": "developer",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "name",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "metadata",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "stakedAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "reputation",
+                "type": "t_uint16",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "registeredAt",
+                "type": "t_uint64",
+                "offset": 2,
+                "slot": "4"
+              },
+              {
+                "label": "totalMatches",
+                "type": "t_uint32",
+                "offset": 10,
+                "slot": "4"
+              },
+              {
+                "label": "totalDisputes",
+                "type": "t_uint32",
+                "offset": 14,
+                "slot": "4"
+              },
+              {
+                "label": "isActive",
+                "type": "t_bool",
+                "offset": 18,
+                "slot": "4"
+              },
+              {
+                "label": "isBanned",
+                "type": "t_bool",
+                "offset": 19,
+                "slot": "4"
+              }
+            ],
+            "numberOfBytes": "160"
+          },
+          "t_struct(Match)2624_storage": {
+            "label": "struct GameRegistry.Match",
+            "members": [
+              {
+                "label": "gameId",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "scheduledTime",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "metadata",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "submitter",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "hasResult",
+                "type": "t_bool",
+                "offset": 20,
+                "slot": "3"
+              },
+              {
+                "label": "createdAt",
+                "type": "t_uint64",
+                "offset": 21,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          },
+          "t_uint16": {
+            "label": "uint16",
+            "numberOfBytes": "2"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin\\contracts-upgradeable\\utils\\ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "ca4c800f0daeda7bcdb9b066692d09d5998354c728f46f149cf46ecaafad0e1e": {
+      "address": "0xA8fC62CbadcE02A1993a5256aE29069a1E72Fc99",
+      "txHash": "0xb3ca3ce2e06af55d63473481425d1df6a8490f1f7fd1dc38df76d4135bb76855",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "queryFee",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:47"
+          },
+          {
+            "label": "gameRegistry",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(GameRegistry)3429",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:67"
+          },
+          {
+            "label": "disputeResolver",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_address",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:70"
+          },
+          {
+            "label": "oracleCore",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_address",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:73"
+          },
+          {
+            "label": "consumerBalances",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_address,t_struct(ConsumerBalance)1602_storage)",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:76"
+          },
+          {
+            "label": "developerEarnings",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_bytes32,t_struct(DeveloperEarnings)1611_storage)",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:79"
+          },
+          {
+            "label": "protocolBalance",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:82"
+          },
+          {
+            "label": "disputerPoolBalance",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_uint256",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:85"
+          },
+          {
+            "label": "totalQueries",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint256",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:88"
+          },
+          {
+            "label": "totalRevenue",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "FeeManager",
+            "src": "contracts\\FeeManager.sol:91"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)226_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(GameRegistry)3429": {
+            "label": "contract GameRegistry",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_struct(ConsumerBalance)1602_storage)": {
+            "label": "mapping(address => struct FeeManager.ConsumerBalance)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(DeveloperEarnings)1611_storage)": {
+            "label": "mapping(bytes32 => struct FeeManager.DeveloperEarnings)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(ConsumerBalance)1602_storage": {
+            "label": "struct FeeManager.ConsumerBalance",
+            "members": [
+              {
+                "label": "depositedAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "creditAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "queriesUsed",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "lastResetTime",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "freeQueriesUsed",
+                "type": "t_uint32",
+                "offset": 8,
+                "slot": "3"
+              },
+              {
+                "label": "bonusTier",
+                "type": "t_uint8",
+                "offset": 12,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          },
+          "t_struct(DeveloperEarnings)1611_storage": {
+            "label": "struct FeeManager.DeveloperEarnings",
+            "members": [
+              {
+                "label": "totalEarned",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "withdrawn",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "pendingEarnings",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "totalQueries",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin\\contracts-upgradeable\\utils\\ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "703afb711039503e20be55ea094719b4b5259ee46fbabd9b729f320035f8662b": {
+      "address": "0x175E41516A1eF918E829F2f8915C2F3376B748eF",
+      "txHash": "0x513e12e6c8cf1e21b4d45c4d3dbc48ff7f98ff04fc7558e08d522a4b8540c435",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "gameRegistry",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(GameRegistry)3429",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:48"
+          },
+          {
+            "label": "feeManager",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(FeeManager)2560",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:51"
+          },
+          {
+            "label": "disputeResolver",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_address",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:54"
+          },
+          {
+            "label": "results",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_bytes32,t_struct(Result)3480_storage)",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:57"
+          },
+          {
+            "label": "quickFields",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_bytes32,t_mapping(t_bytes32,t_bytes32))",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:60"
+          },
+          {
+            "label": "totalResults",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_uint256",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:63"
+          },
+          {
+            "label": "totalFinalized",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256",
+            "contract": "OracleCore",
+            "src": "contracts\\OracleCore.sol:66"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)226_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_bytes_storage": {
+            "label": "bytes",
+            "numberOfBytes": "32"
+          },
+          "t_contract(FeeManager)2560": {
+            "label": "contract FeeManager",
+            "numberOfBytes": "20"
+          },
+          "t_contract(GameRegistry)3429": {
+            "label": "contract GameRegistry",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_bytes32,t_bytes32)": {
+            "label": "mapping(bytes32 => bytes32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_mapping(t_bytes32,t_bytes32))": {
+            "label": "mapping(bytes32 => mapping(bytes32 => bytes32))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(Result)3480_storage)": {
+            "label": "mapping(bytes32 => struct OracleCore.Result)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Result)3480_storage": {
+            "label": "struct OracleCore.Result",
+            "members": [
+              {
+                "label": "matchId",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "gameId",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "submitter",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "encodedData",
+                "type": "t_bytes_storage",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "decodeSchema",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "submittedAt",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "finalizedAt",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "5"
+              },
+              {
+                "label": "isFinalized",
+                "type": "t_bool",
+                "offset": 16,
+                "slot": "5"
+              },
+              {
+                "label": "isDisputed",
+                "type": "t_bool",
+                "offset": 17,
+                "slot": "5"
+              }
+            ],
+            "numberOfBytes": "192"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin\\contracts-upgradeable\\utils\\ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "ccc8dd92e05c323c3023ab730c7b0e350012639c2dd5404b8ff14063c9e694ae": {
+      "address": "0x2E3b25Ac537516e9C565AeCa7c7e86aA16bBCB3c",
+      "txHash": "0xc55b894e2a3f8498d9c444887c9d486f9d0a42e814cf29d23a43e356ccae9ba1",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "challengeStake",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:56"
+          },
+          {
+            "label": "gameRegistry",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(GameRegistry)4552",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:59"
+          },
+          {
+            "label": "oracleCore",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_contract(OracleCore)5406",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:62"
+          },
+          {
+            "label": "feeManager",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_contract(FeeManager)3683",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:65"
+          },
+          {
+            "label": "disputes",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_bytes32,t_struct(Dispute)1689_storage)",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:68"
+          },
+          {
+            "label": "matchDisputes",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_bytes32,t_bytes32)",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:71"
+          },
+          {
+            "label": "resolvers",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:74"
+          },
+          {
+            "label": "totalDisputes",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_uint256",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:77"
+          },
+          {
+            "label": "totalResolved",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint256",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:80"
+          },
+          {
+            "label": "totalAccepted",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:83"
+          },
+          {
+            "label": "totalRejected",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_uint256",
+            "contract": "DisputeResolver",
+            "src": "contracts\\DisputeResolver.sol:86"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)226_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(FeeManager)3683": {
+            "label": "contract FeeManager",
+            "numberOfBytes": "20"
+          },
+          "t_contract(GameRegistry)4552": {
+            "label": "contract GameRegistry",
+            "numberOfBytes": "20"
+          },
+          "t_contract(OracleCore)5406": {
+            "label": "contract OracleCore",
+            "numberOfBytes": "20"
+          },
+          "t_enum(DisputeStatus)1667": {
+            "label": "enum DisputeResolver.DisputeStatus",
+            "members": [
+              "Pending",
+              "Accepted",
+              "Rejected",
+              "Investigating"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_bytes32)": {
+            "label": "mapping(bytes32 => bytes32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(Dispute)1689_storage)": {
+            "label": "mapping(bytes32 => struct DisputeResolver.Dispute)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Dispute)1689_storage": {
+            "label": "struct DisputeResolver.Dispute",
+            "members": [
+              {
+                "label": "matchId",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "gameId",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "challenger",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "stakeAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "createdAt",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "resolvedAt",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "4"
+              },
+              {
+                "label": "status",
+                "type": "t_enum(DisputeStatus)1667",
+                "offset": 16,
+                "slot": "4"
+              },
+              {
+                "label": "reason",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "evidenceHash",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "resolver",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "7"
+              }
+            ],
+            "numberOfBytes": "256"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin\\contracts-upgradeable\\utils\\ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

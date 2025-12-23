@@ -1,0 +1,42 @@
+{
+  "network": "bscTestnet",
+  "chainId": "97",
+  "deployer": "0x49F92ABd98739C67aD0FD0493ae238305dC32d17",
+  "timestamp": "2025-12-23T11:59:36.101Z",
+  "version": "2.0.0",
+  "contracts": {
+    "core": {
+      "GameRegistry": "0xC9F0faED201b8079D35b6017FE0E14195985AC01",
+      "OracleCore": "0xA5BE322eb075F9A8Ac257b5DD1B6cD845F2aC815",
+      "FeeManager": "0x2c03a7Ea490Ad7aec66276EEdA583e7F6293a54d",
+      "DisputeResolver": "0x9427460958C08Ff8961fce686Cf4D4f365dCF298"
+    },
+    "games": {
+      "RockPaperScissors": "0x5Fd2c1C4C5b71Da340d35ddAcCE8651862c12DeE"
+    },
+    "markets": {
+      "RPSPredictionMarket": "0xA70556c95138812b6D8eB88C7a43D63BDe410E1d"
+    }
+  },
+  "gameIds": {
+    "RockPaperScissors": "0x18213c1a79c64e06197993b4aed00d623dd1263283e274ee8dae986777cd7a62"
+  },
+  "configuration": {
+    "minimumStake": "0.1 BNB",
+    "queryFee": "0.003 BNB",
+    "challengeStake": "0.2 BNB",
+    "disputeWindow": "15 minutes",
+    "freeTierDailyLimit": 50,
+    "platformFee": "2% (200 basis points)",
+    "revenueplit": "80% dev / 15% protocol / 5% disputers"
+  },
+  "features": [
+    "UUPS upgradeable core contracts",
+    "On-chain RPS game with verifiable randomness",
+    "Parimutuel prediction market",
+    "Oracle-based result resolution",
+    "Prepaid query balances with volume bonuses",
+    "15-minute dispute window",
+    "Free tier: 50 queries/day"
+  ]
+}

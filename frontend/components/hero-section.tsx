@@ -8,7 +8,7 @@ import { BitmapChevron } from "@/components/bitmap-chevron"
 import Link from "next/link"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
-
+import { PredictBNBLogo } from "@/components/predictbnb"
 gsap.registerPlugin(ScrollTrigger)
 
 export function HeroSection() {
@@ -37,11 +37,31 @@ export function HeroSection() {
   return (
     <section ref={sectionRef} id="hero" className="relative min-h-screen flex items-center pl-6 md:pl-28 pr-6 md:pr-12">
       <AnimatedNoise opacity={0.03} />
+        <div className="absolute top-8 left-6 md:top-12 md:left-28 z-20">
+        <PredictBNBLogo />
+      </div>
 
       <div className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2">
         <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground -rotate-90 origin-left block whitespace-nowrap">
           PredictBNB
         </span>
+      </div>
+
+      <div className="absolute top-8 right-8 md:top-12 md:right-12 flex items-center gap-4 z-20">
+        <Link
+          href="/game/rps"
+          className="group inline-flex items-center gap-2 border border-foreground/20 px-4 py-2 font-mono text-xs uppercase tracking-widest text-foreground hover:border-accent hover:text-accent transition-all duration-200"
+        >
+          <ScrambleTextOnHover text="Play Game" as="span" duration={0.5} />
+          <BitmapChevron className="w-3 h-3 transition-transform duration-[400ms] ease-in-out group-hover:rotate-45" />
+        </Link>
+        <Link
+          href="/prediction-market"
+          className="group inline-flex items-center gap-2 border border-accent bg-accent/10 px-4 py-2 font-mono text-xs uppercase tracking-widest text-accent hover:bg-accent hover:text-background transition-all duration-200"
+        >
+          <ScrambleTextOnHover text="Bet Now" as="span" duration={0.5} />
+          <BitmapChevron className="w-3 h-3 transition-transform duration-[400ms] ease-in-out group-hover:rotate-45" />
+        </Link>
       </div>
 
       <div ref={contentRef} className="flex-1 w-full">

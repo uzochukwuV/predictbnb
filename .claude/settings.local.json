@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx hardhat compile:*)",
-      "Bash(npx hardhat test:*)"
+      "Bash(npx hardhat test:*)",
+      "Bash(node scripts/export-abis.js:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
