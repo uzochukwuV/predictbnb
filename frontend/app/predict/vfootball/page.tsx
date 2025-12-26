@@ -101,7 +101,7 @@ export default function VirtualFootballPredictionMarketPage() {
     functionName: "getSeason",
     args: currentSeasonId ? [Number(currentSeasonId)] : undefined,
     query: {
-      enabled: !!currentSeasonId && currentSeasonId > 0,
+      enabled: !!currentSeasonId && (currentSeasonId as bigint) > 0,
     },
   })
 
@@ -111,7 +111,7 @@ export default function VirtualFootballPredictionMarketPage() {
     functionName: "getSeasonMatches",
     args: currentSeasonId ? [Number(currentSeasonId)] : undefined,
     query: {
-      enabled: !!currentSeasonId && currentSeasonId > 0,
+      enabled: !!currentSeasonId && (currentSeasonId as bigint) > 0,
     },
   })
 
@@ -121,7 +121,7 @@ export default function VirtualFootballPredictionMarketPage() {
     functionName: "seasonVotes",
     args: currentSeasonId && address ? [Number(currentSeasonId), address] : undefined,
     query: {
-      enabled: !!currentSeasonId && !!address && currentSeasonId > 0,
+      enabled: !!currentSeasonId && !!address && (currentSeasonId as bigint) > 0,
     },
   })
 
@@ -141,7 +141,7 @@ export default function VirtualFootballPredictionMarketPage() {
     functionName: "seasonBettingVolume",
     args: currentSeasonId ? [Number(currentSeasonId)] : undefined,
     query: {
-      enabled: !!currentSeasonId && currentSeasonId > 0,
+      enabled: !!currentSeasonId && (currentSeasonId as bigint) > 0,
     },
   })
 
@@ -253,7 +253,7 @@ export default function VirtualFootballPredictionMarketPage() {
       <AnimatedNoise opacity={0.02} />
 
       <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Header */}
+      
         <div className="mb-12">
           <Link
             href="/"
@@ -270,13 +270,13 @@ export default function VirtualFootballPredictionMarketPage() {
           </p>
         </div>
 
-        {/* Season Info Bar */}
-        {season && currentSeasonId && Number(currentSeasonId) > 0 && (
+       
+        {(season) && (currentSeasonId as bigint) && Number(currentSeasonId as bigint) > 0 && (
           <Card className="p-4 mb-8 border-border/30 bg-card/50 backdrop-blur-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <div className="font-mono text-xs text-muted-foreground mb-1">Season</div>
-                <div className="font-mono text-lg text-accent">#{currentSeasonId.toString()}</div>
+                <div className="font-mono text-lg text-accent">#{(currentSeasonId as bigint).toString()}</div>
               </div>
               <div>
                 <div className="font-mono text-xs text-muted-foreground mb-1">Status</div>

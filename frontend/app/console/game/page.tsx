@@ -78,7 +78,7 @@ export default function GameProviderDashboard() {
     )
   }
 
-  const gameCount = gameIds?.length || 0
+  const gameCount = (gameIds as any)?.length || 0
   const totalResultsCount = oracleStats?.[0]?.result ? Number(oracleStats[0].result) : 0
   const totalFinalizedCount = oracleStats?.[1]?.result ? Number(oracleStats[1].result) : 0
   const totalDisputedCount = oracleStats?.[2]?.result ? Number(oracleStats[2].result) : 0
@@ -197,9 +197,9 @@ export default function GameProviderDashboard() {
                 </div>
               </div>
 
-              {gameIds?.map((gameId, index) => (
-                <GameRow key={index} gameId={gameId} />
-              ))}
+                {(gameIds as Address[])?.map((gameId) => (
+                <GameRow key={gameId} gameId={gameId} />
+                ))}
             </div>
           </div>
         ) : (

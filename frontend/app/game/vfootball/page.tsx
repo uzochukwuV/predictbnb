@@ -66,7 +66,7 @@ export default function VirtualFootballGamePage() {
     functionName: "getSeason",
     args: currentSeasonId ? [Number(currentSeasonId)] : undefined,
     query: {
-      enabled: !!currentSeasonId && currentSeasonId > 0,
+      enabled: !!currentSeasonId && (currentSeasonId as any) > 0,
     },
   })
 
@@ -76,7 +76,7 @@ export default function VirtualFootballGamePage() {
     functionName: "getSeasonMatches",
     args: currentSeasonId ? [Number(currentSeasonId)] : undefined,
     query: {
-      enabled: !!currentSeasonId && currentSeasonId > 0,
+      enabled: !!currentSeasonId && (currentSeasonId as any) > 0,
     },
   })
 
@@ -299,8 +299,8 @@ export default function VirtualFootballGamePage() {
                   </div>
                 </div>
 
-                {/* Admin Actions */}
-                {isOwner && (
+                
+                {(isOwner as any) && (
                   <div className="mt-6 pt-6 border-t border-border/30">
                     <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-4">
                       Admin Actions
@@ -340,7 +340,7 @@ export default function VirtualFootballGamePage() {
                 <div className="font-mono text-sm text-muted-foreground mb-6">
                   No active season. {isOwner ? "Create a new season to get started." : "Wait for admin to create a season."}
                 </div>
-                {isOwner && (
+                {(isOwner as any) && (
                   <div className="max-w-md mx-auto space-y-4">
                     <div>
                       <label className="font-mono text-xs text-muted-foreground mb-2 block">
