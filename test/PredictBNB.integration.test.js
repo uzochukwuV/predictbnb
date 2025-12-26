@@ -8,7 +8,7 @@ describe("PredictBNB Integration Test", function () {
   let owner, gameDev, player1, player2, consumer1, consumer2, resolver;
 
   const MINIMUM_STAKE = ethers.parseEther("0.1");
-  const QUERY_FEE = ethers.parseEther("0.003");
+  const QUERY_FEE = ethers.parseEther("0.00416"); // $2.00 at $480/BNB
   const CHALLENGE_STAKE = ethers.parseEther("0.2");
 
   beforeEach(async function () {
@@ -28,15 +28,15 @@ describe("PredictBNB Integration Test", function () {
     await gameRegistry.waitForDeployment();
     console.log("✅ GameRegistry deployed");
 
-    // 2. Deploy FeeManager
-    const FeeManager = await ethers.getContractFactory("FeeManager");
+    // 2. Deploy FeeManagerV2
+    const FeeManagerV2 = await ethers.getContractFactory("FeeManagerV2");
     feeManager = await upgrades.deployProxy(
-      FeeManager,
+      FeeManagerV2,
       [await gameRegistry.getAddress(), QUERY_FEE],
       { kind: "uups" }
     );
     await feeManager.waitForDeployment();
-    console.log("✅ FeeManager deployed");
+    console.log("✅ FeeManagerV2 deployed");
 
     // 3. Deploy OracleCore
     const OracleCore = await ethers.getContractFactory("OracleCore");
@@ -177,24 +177,26 @@ describe("PredictBNB Integration Test", function () {
       // ============================================
       console.log("\n💳 STEP 4: Consumers Deposit Prepaid Balance");
 
-      // Consumer 1: Small deposit (no bonus)
+      // Consumer 1: Small deposit (no referrer, no bonus)
       const deposit1 = ethers.parseEther("5");
-      await feeManager.connect(consumer1).depositBalance({ value: deposit1 });
+      await feeManager.connect(consumer1).depositBalance(ethers.ZeroAddress, { value: deposit1 });
 
-      let balance1 = await feeManager.getConsumerBalance(consumer1.address);
-      expect(balance1.creditAmount).to.equal(deposit1); // No bonus
+      let balance1 = await feeManager.consumerBalances(consumer1.address);
+      expect(balance1.realBalance).to.equal(deposit1); // No bonus, just real balance
       console.log("   ✅ Consumer 1 deposited:", ethers.formatEther(deposit1), "BNB");
-      console.log("      💎 Credits:", ethers.formatEther(balance1.creditAmount), "BNB (0% bonus)");
+      console.log("      💎 Balance:", ethers.formatEther(balance1.realBalance), "BNB (no bonus)");
 
-      // Consumer 2: Large deposit (15% bonus for 100+ BNB)
+      // Consumer 2: Large deposit with tier bonus (50+ BNB = 10% bonus)
       const deposit2 = ethers.parseEther("100");
-      await feeManager.connect(consumer2).depositBalance({ value: deposit2 });
+      await feeManager.connect(consumer2).depositBalance(ethers.ZeroAddress, { value: deposit2 });
 
-      let balance2 = await feeManager.getConsumerBalance(consumer2.address);
-      const expectedCredits2 = deposit2 + (deposit2 * 15n / 100n); // 15% bonus
-      expect(balance2.creditAmount).to.equal(expectedCredits2);
+      let balance2 = await feeManager.consumerBalances(consumer2.address);
+      const expectedBonus = deposit2 * 15n / 100n; // 15% bonus for tier 3 (100+ BNB)
+      expect(balance2.bonusBalance).to.equal(expectedBonus);
+      expect(balance2.realBalance).to.equal(deposit2);
       console.log("   ✅ Consumer 2 deposited:", ethers.formatEther(deposit2), "BNB");
-      console.log("      💎 Credits:", ethers.formatEther(balance2.creditAmount), "BNB (15% bonus! 🎉)");
+      console.log("      💎 Real Balance:", ethers.formatEther(balance2.realBalance), "BNB");
+      console.log("      🎁 Bonus Balance:", ethers.formatEther(balance2.bonusBalance), "BNB (15% bonus! 🎉)");
 
       // ============================================
       // STEP 5: Users Place Bets
@@ -261,8 +263,9 @@ describe("PredictBNB Integration Test", function () {
       console.log("\n🔮 STEP 8: Prediction Market Queries Oracle for Winner");
 
       // Check balances before query
-      const balanceBeforeQuery = await feeManager.getConsumerBalance(await predictionMarket.getAddress());
-      console.log("   📊 Market balance before query:", ethers.formatEther(balanceBeforeQuery.creditAmount), "BNB");
+      const balanceBeforeQuery = await feeManager.consumerBalances(await predictionMarket.getAddress());
+      const totalBalance = balanceBeforeQuery.realBalance + balanceBeforeQuery.bonusBalance;
+      console.log("   📊 Market balance before query:", ethers.formatEther(totalBalance), "BNB");
 
       // Prediction market needs prepaid balance to query oracle
       await predictionMarket.connect(owner).fundOracleBalance({ value: ethers.parseEther("1") });
@@ -285,20 +288,20 @@ describe("PredictBNB Integration Test", function () {
       // ============================================
       console.log("\n💸 STEP 9: Revenue Distribution Analysis");
 
-      const devEarnings = await feeManager.getDeveloperEarnings(gameId);
+      const devEarnings = await feeManager.developerEarnings(gameId);
       const expectedDevEarnings = QUERY_FEE * 80n / 100n; // 80% of query fee
 
       // Check if free tier was used
-      const marketBalance = await feeManager.getConsumerBalance(await predictionMarket.getAddress());
+      const marketBalance = await feeManager.consumerBalances(await predictionMarket.getAddress());
 
       console.log("   📊 Revenue Split from Query:");
-      console.log("      ✅ Query used FREE TIER (1/50 daily queries)");
+      console.log("      ✅ Query used FREE TIER (1/5 lifetime trial matches)");
       console.log("      💡 No payment required - showcasing free tier benefit!");
-      console.log("      🔋 Remaining prepaid balance:", ethers.formatEther(marketBalance.creditAmount), "BNB");
+      const marketTotalBalance = marketBalance.realBalance + marketBalance.bonusBalance;
+      console.log("      🔋 Remaining prepaid balance:", ethers.formatEther(marketTotalBalance), "BNB");
 
       // Since free tier was used, there are no earnings yet
       expect(devEarnings.pendingEarnings).to.equal(0);
-      expect(marketBalance.freeQueriesUsed).to.equal(1);
 
       console.log("\n   💸 Revenue Split (when paid queries are used):");
       console.log("      🎮 Developer (80%):", ethers.formatEther(expectedDevEarnings), "BNB = $1.44 per query");
@@ -310,32 +313,92 @@ describe("PredictBNB Integration Test", function () {
       // ============================================
       console.log("\n💵 STEP 10: Demonstrating Paid Query Revenue");
 
-      // Note: The first query already used 1 free query
-      // To demonstrate paid queries, we'll query directly from consumer1 who has prepaid balance
+      // Note: The prediction market used 1 free query (from prediction market's address, not consumer1)
+      // Consumer1 hasn't queried anything yet, so their free tier is 0/5
+      // To demonstrate paid queries, we need consumer1 to exhaust their 5 free matches first
       const winnerField = ethers.keccak256(ethers.toUtf8Bytes("winner"));
 
-      // Exhaust consumer1's free tier (they already used 0, so do 50)
-      for (let i = 0; i < 50; i++) {
-        await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
+      // Create 5 matches for consumer1 to exhaust their free tier (5 total)
+      for (let i = 0; i < 5; i++) {
+        const newMatchTime = (await time.latest()) + 100;
+        const scheduleTx = await mockChessGame.connect(gameDev).scheduleMatch(
+          player1.address,
+          player2.address,
+          newMatchTime
+        );
+        const scheduleReceipt = await scheduleTx.wait();
+        const newMatchId = scheduleReceipt.logs.find(
+          log => log.fragment && log.fragment.name === "MatchCreated"
+        ).args.matchId;
+
+        await time.increaseTo(newMatchTime + 1);
+        await mockChessGame.connect(gameDev).submitMatchResult(newMatchId, player1.address, 45, 1800);
+        await time.increase(15 * 60 + 1);
+        await oracleCore.finalizeResult(newMatchId);
+
+        // Consumer1 queries this new match (uses free tier)
+        await oracleCore.connect(consumer1).getResultField(newMatchId, winnerField);
       }
 
-      console.log("   🔋 Consumer1 exhausted free tier (50/50 queries used)");
+      // Verify free tier is actually exhausted
+      let trialUsed = await feeManager.lifetimeTrialQueries(consumer1.address);
+      console.log("   🔋 Consumer1 free tier status:", trialUsed.toString(), "/ 5 lifetime matches used");
+      expect(trialUsed).to.equal(5);
+
+      console.log("   🔋 Consumer1 exhausted free tier (5/5 lifetime matches used)");
+
+      // Check balance before paid query
+      const balanceBeforePaid = await feeManager.consumerBalances(consumer1.address);
+      const totalBeforePaid = balanceBeforePaid.realBalance + balanceBeforePaid.bonusBalance;
+      console.log("   💳 Consumer1 balance before paid query:", ethers.formatEther(totalBeforePaid), "BNB");
+
+      // Create one more match - this will be PAID
+      const paidMatchTime = (await time.latest()) + 100;
+      const paidScheduleTx = await mockChessGame.connect(gameDev).scheduleMatch(
+        player1.address,
+        player2.address,
+        paidMatchTime
+      );
+      const paidScheduleReceipt = await paidScheduleTx.wait();
+      const paidMatchId = paidScheduleReceipt.logs.find(
+        log => log.fragment && log.fragment.name === "MatchCreated"
+      ).args.matchId;
+
+      // Verify this match has the correct gameId
+      const paidMatch = await gameRegistry.getMatch(paidMatchId);
+      console.log("   🎮 Paid match gameId:", paidMatch.gameId);
+      console.log("   🎮 Expected gameId:", gameId);
+      expect(paidMatch.gameId).to.equal(gameId);
+
+      await time.increaseTo(paidMatchTime + 1);
+      await mockChessGame.connect(gameDev).submitMatchResult(paidMatchId, player1.address, 45, 1800);
+      await time.increase(15 * 60 + 1);
+      await oracleCore.finalizeResult(paidMatchId);
 
       // Next query will be PAID from their prepaid balance
-      await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
+      await oracleCore.connect(consumer1).getResultField(paidMatchId, winnerField);
 
-      const finalEarnings = await feeManager.getDeveloperEarnings(gameId);
+      // Check balance after paid query
+      const balanceAfterPaid = await feeManager.consumerBalances(consumer1.address);
+      const totalAfterPaid = balanceAfterPaid.realBalance + balanceAfterPaid.bonusBalance;
+      console.log("   💳 Consumer1 balance after paid query:", ethers.formatEther(totalAfterPaid), "BNB");
+      console.log("   💸 Expected deduction:", ethers.formatEther(QUERY_FEE), "BNB");
+
+      const finalEarnings = await feeManager.developerEarnings(gameId);
+      console.log("   💰 Developer earnings struct:", finalEarnings);
+      console.log("   💰 Pending earnings:", ethers.formatEther(finalEarnings.pendingEarnings), "BNB");
+      console.log("   💰 Expected earnings:", ethers.formatEther(expectedDevEarnings), "BNB");
       expect(finalEarnings.pendingEarnings).to.equal(expectedDevEarnings);
-      expect(finalEarnings.totalQueries).to.equal(1); // 1 paid query
 
       console.log("   💰 Paid query completed!");
       console.log("   📊 Developer earned:", ethers.formatEther(finalEarnings.pendingEarnings), "BNB");
 
       // Check consumer1's balance was debited
-      const consumer1Balance = await feeManager.getConsumerBalance(consumer1.address);
+      const consumer1Balance = await feeManager.consumerBalances(consumer1.address);
       const expectedBalance = ethers.parseEther("5") - QUERY_FEE;
-      expect(consumer1Balance.creditAmount).to.equal(expectedBalance);
-      console.log("   💳 Consumer1 balance after paid query:", ethers.formatEther(consumer1Balance.creditAmount), "BNB");
+      const consumer1Total = consumer1Balance.realBalance + consumer1Balance.bonusBalance;
+      expect(consumer1Total).to.equal(expectedBalance);
+      console.log("   💳 Consumer1 balance after paid query:", ethers.formatEther(consumer1Total), "BNB");
 
       // Withdraw earnings
       await mockChessGame.connect(gameDev).withdrawEarnings(
@@ -343,9 +406,8 @@ describe("PredictBNB Integration Test", function () {
         gameDev.address
       );
 
-      const earningsAfterWithdraw = await feeManager.getDeveloperEarnings(gameId);
+      const earningsAfterWithdraw = await feeManager.developerEarnings(gameId);
       expect(earningsAfterWithdraw.pendingEarnings).to.equal(0);
-      expect(earningsAfterWithdraw.withdrawn).to.equal(expectedDevEarnings);
 
       console.log("   ✅ Developer withdrew earnings successfully!");
 
@@ -404,7 +466,7 @@ describe("PredictBNB Integration Test", function () {
       console.log("\n✅ Game registered");
 
       // Deposit balance for queries
-      await feeManager.connect(consumer1).depositBalance({ value: ethers.parseEther("10") });
+      await feeManager.connect(consumer1).depositBalance(ethers.ZeroAddress, { value: ethers.parseEther("10") });
       console.log("✅ Consumer deposited balance");
 
       const numMatches = 5;
@@ -445,9 +507,9 @@ describe("PredictBNB Integration Test", function () {
         console.log(`   ✅ Match ${i + 1}/5 completed and queried`);
       }
 
-      // Note: These queries used the free tier, so there are no earnings yet
+      // Note: First 5 queries used the free tier, so there are no earnings yet
       // This demonstrates that the system correctly tracks multiple matches
-      const earnings = await feeManager.getDeveloperEarnings(gameId);
+      const earnings = await feeManager.developerEarnings(gameId);
 
       console.log(`\n✅ Successfully completed ${numMatches} matches!`);
       console.log(`   📊 All matches tracked in oracle`);
@@ -487,43 +549,89 @@ describe("PredictBNB Integration Test", function () {
       // Query using free tier (no deposit needed)
       const winnerField = ethers.keccak256(ethers.toUtf8Bytes("winner"));
 
-      // Should work without deposit (using free tier)
+      // Should work without deposit (using free tier - lifetime 5 free matches)
       await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
 
-      let balance = await feeManager.getConsumerBalance(consumer1.address);
-      expect(balance.freeQueriesUsed).to.equal(1);
-      expect(balance.creditAmount).to.equal(0); // No credits used
+      let balance = await feeManager.consumerBalances(consumer1.address);
+      let trialUsed = await feeManager.lifetimeTrialQueries(consumer1.address);
+      expect(trialUsed).to.equal(1);
+      const totalBalance1 = balance.realBalance + balance.bonusBalance;
+      expect(totalBalance1).to.equal(0); // No credits used
 
-      console.log("   ✅ Query 1: FREE (1/50 free queries used)");
+      console.log("   ✅ Match 1: FREE (1/5 lifetime trial matches used)");
 
-      // Use up remaining free queries (simulate)
-      for (let i = 1; i < 50; i++) {
-        await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
+      // Note: Multiple queries on same match are FREE (per-consumer per-match model)
+      await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
+      await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
+
+      trialUsed = await feeManager.lifetimeTrialQueries(consumer1.address);
+      expect(trialUsed).to.equal(1); // Still only 1 because same match
+
+      console.log("   ✅ Multiple queries on same match: FREE (per-consumer per-match)");
+
+      // Create 4 more matches to exhaust free tier
+      for (let i = 0; i < 4; i++) {
+        const newMatchTime = (await time.latest()) + 100;
+        const scheduleTx = await mockChessGame.connect(gameDev).scheduleMatch(
+          player1.address,
+          player2.address,
+          newMatchTime
+        );
+        const scheduleReceipt = await scheduleTx.wait();
+        const newMatchId = scheduleReceipt.logs.find(
+          log => log.fragment && log.fragment.name === "MatchCreated"
+        ).args.matchId;
+
+        await time.increaseTo(newMatchTime + 1);
+        await mockChessGame.connect(gameDev).submitMatchResult(newMatchId, player1.address, 45, 1800);
+        await time.increase(15 * 60 + 1);
+        await oracleCore.finalizeResult(newMatchId);
+
+        // Query new match (uses free tier)
+        await oracleCore.connect(consumer1).getResultField(newMatchId, winnerField);
       }
 
-      balance = await feeManager.getConsumerBalance(consumer1.address);
-      expect(balance.freeQueriesUsed).to.equal(50);
+      trialUsed = await feeManager.lifetimeTrialQueries(consumer1.address);
+      expect(trialUsed).to.equal(5); // All 5 free matches used
 
-      console.log("   ✅ Queries 2-50: FREE (50/50 free queries used)");
+      console.log("   ✅ Matches 2-5: FREE (5/5 lifetime trial matches used)");
 
-      // 51st query should require payment
+      // 6th match should require payment
+      const finalMatchTime = (await time.latest()) + 100;
+      const finalScheduleTx = await mockChessGame.connect(gameDev).scheduleMatch(
+        player1.address,
+        player2.address,
+        finalMatchTime
+      );
+      const finalScheduleReceipt = await finalScheduleTx.wait();
+      const finalMatchId = finalScheduleReceipt.logs.find(
+        log => log.fragment && log.fragment.name === "MatchCreated"
+      ).args.matchId;
+
+      await time.increaseTo(finalMatchTime + 1);
+      await mockChessGame.connect(gameDev).submitMatchResult(finalMatchId, player1.address, 45, 1800);
+      await time.increase(15 * 60 + 1);
+      await oracleCore.finalizeResult(finalMatchId);
+
+      // Should fail without balance
       await expect(
-        oracleCore.connect(consumer1).getResultField(matchId, winnerField)
+        oracleCore.connect(consumer1).getResultField(finalMatchId, winnerField)
       ).to.be.revertedWithCustomError(feeManager, "InsufficientBalance");
 
-      console.log("   ❌ Query 51: FAILED (free tier exhausted, no prepaid balance)");
+      console.log("   ❌ Match 6: FAILED (free tier exhausted, no prepaid balance)");
 
       // Deposit and query
-      await feeManager.connect(consumer1).depositBalance({ value: ethers.parseEther("1") });
-      await oracleCore.connect(consumer1).getResultField(matchId, winnerField);
+      await feeManager.connect(consumer1).depositBalance(ethers.ZeroAddress, { value: ethers.parseEther("1") });
+      await oracleCore.connect(consumer1).getResultField(finalMatchId, winnerField);
 
-      balance = await feeManager.getConsumerBalance(consumer1.address);
-      expect(balance.creditAmount).to.equal(ethers.parseEther("1") - QUERY_FEE);
+      balance = await feeManager.consumerBalances(consumer1.address);
+      const totalBalance2 = balance.realBalance + balance.bonusBalance;
+      expect(totalBalance2).to.equal(ethers.parseEther("1") - QUERY_FEE);
 
-      console.log("   ✅ Query 51: PAID (prepaid balance used)");
-      console.log(`   💰 Remaining balance: ${ethers.formatEther(balance.creditAmount)} BNB`);
+      console.log("   ✅ Match 6: PAID (prepaid balance used)");
+      console.log(`   💰 Remaining balance: ${ethers.formatEther(totalBalance2)} BNB`);
 
-      console.log("\n🎉 Free tier working correctly!");
+      console.log("\n🎉 Free tier working correctly (5 free matches lifetime)!");
     });
   });
 });

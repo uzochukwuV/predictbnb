@@ -7,7 +7,9 @@ async function main() {
     'RPSPredictionMarket',
     'GameRegistry',
     'OracleCore',
-    'FeeManager'
+    'FeeManagerV2',
+    'VirtualFootballGame',
+    'VirtualFootballMarket'
   ];
 
   const frontendAbiDir = path.join(__dirname, '../frontend/lib/abis');
@@ -54,7 +56,9 @@ function getContractPath(contractName) {
     'RPSPredictionMarket': 'examples/RPSPredictionMarket',
     'GameRegistry': 'GameRegistry',
     'OracleCore': 'OracleCore',
-    'FeeManager': 'FeeManager'
+    'FeeManagerV2': 'FeeManagerV2',
+    'VirtualFootballGame': 'games/VirtualFootballGame',
+    'VirtualFootballMarket': 'markets/VirtualFootballMarket'
   };
 
   return pathMap[contractName] || contractName;

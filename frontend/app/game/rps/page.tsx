@@ -72,21 +72,22 @@ export default function RPSGamePage() {
 
   // Parse match data
   const parseMatch = (data: any): RPSMatch | null => {
+    console.log("Debug: Raw match data:", data)
     if (!data) return null
     return {
-      matchId: data[0] as Hex,
-      player1: data[1] as Address,
-      player2: data[2] as Address,
-      scheduledTime: data[3] as bigint,
-      status: Number(data[4]),
-      player1Cards: [Number(data[5][0]), Number(data[5][1]), Number(data[5][2])],
-      player2Cards: [Number(data[6][0]), Number(data[6][1]), Number(data[6][2])],
-      winner: data[7] as Address,
-      player1Wins: Number(data[8]),
-      player2Wins: Number(data[9]),
-      randomSeed1: data[10] as bigint,
-      randomSeed2: data[11] as bigint,
-      completedAt: data[12] as bigint,
+      matchId: data.matchId,
+      player1: data.player1 as Address,
+      player2: data.player2 as Address,
+      scheduledTime: data.scheduledTime as bigint,
+      status: data.status,
+      player1Cards: data.player1Cards,
+      player2Cards: data.player2Cards,
+      winner: data.winner as Address,
+      player1Wins: data.player1Wins,
+      player2Wins: data.player2Wins,
+      randomSeed1: data.randomSeed1 as bigint,
+      randomSeed2: data.randomSeed1 as bigint,
+      completedAt: data.completedAt as bigint,
     }
   }
 

@@ -14,7 +14,7 @@ async function main() {
 
   // Configuration
   const MINIMUM_STAKE = hre.ethers.parseEther("0.1"); // 0.1 BNB
-  const QUERY_FEE = hre.ethers.parseEther("0.003"); // 0.003 BNB (~$1.80 at $600/BNB)
+  const QUERY_FEE = hre.ethers.parseEther("0.00416"); // 0.00416 BNB (~$2.00 at $480/BNB)
   const CHALLENGE_STAKE = hre.ethers.parseEther("0.2"); // 0.2 BNB
 
   // ============ Deploy Core Infrastructure (UUPS Proxies) ============
@@ -31,19 +31,27 @@ async function main() {
   const gameRegistryAddress = await gameRegistry.getAddress();
   console.log("✅ GameRegistry deployed to:", gameRegistryAddress);
 
-  // 2. Deploy FeeManager
-  console.log("\n💰 Deploying FeeManager (UUPS Proxy)...");
-  const FeeManager = await hre.ethers.getContractFactory("FeeManager");
+  // 2. Deploy PredictToken (ERC-20 for airdrops)
+  console.log("\n🪙 Deploying PredictToken...");
+  const PredictToken = await hre.ethers.getContractFactory("PredictToken");
+  const predictToken = await PredictToken.deploy();
+  await predictToken.waitForDeployment();
+  const predictTokenAddress = await predictToken.getAddress();
+  console.log("✅ PredictToken deployed to:", predictTokenAddress);
+
+  // 3. Deploy FeeManagerV2 (Enhanced with incentives)
+  console.log("\n💰 Deploying FeeManagerV2 (UUPS Proxy)...");
+  const FeeManagerV2 = await hre.ethers.getContractFactory("FeeManagerV2");
   const feeManager = await upgrades.deployProxy(
-    FeeManager,
+    FeeManagerV2,
     [gameRegistryAddress, QUERY_FEE],
     { kind: "uups" }
   );
   await feeManager.waitForDeployment();
   const feeManagerAddress = await feeManager.getAddress();
-  console.log("✅ FeeManager deployed to:", feeManagerAddress);
+  console.log("✅ FeeManagerV2 deployed to:", feeManagerAddress);
 
-  // 3. Deploy OracleCore
+  // 4. Deploy OracleCore
   console.log("\n🔮 Deploying OracleCore (UUPS Proxy)...");
   const OracleCore = await hre.ethers.getContractFactory("OracleCore");
   const oracleCore = await upgrades.deployProxy(
@@ -55,7 +63,7 @@ async function main() {
   const oracleCoreAddress = await oracleCore.getAddress();
   console.log("✅ OracleCore deployed to:", oracleCoreAddress);
 
-  // 4. Deploy DisputeResolver
+  // 5. Deploy DisputeResolver
   console.log("\n⚖️  Deploying DisputeResolver (UUPS Proxy)...");
   const DisputeResolver = await hre.ethers.getContractFactory("DisputeResolver");
   const disputeResolver = await upgrades.deployProxy(
@@ -74,11 +82,27 @@ async function main() {
   await gameRegistry.updateOracleCore(oracleCoreAddress);
   await feeManager.updateDisputeResolver(disputeResolverAddress);
   await feeManager.updateOracleCore(oracleCoreAddress);
+
+  // Connect PredictToken to FeeManagerV2
+  await predictToken.setFeeManager(feeManagerAddress);
   console.log("✅ All contracts connected");
+
+  // ============ Fund Incentive Pools ============
+  console.log("\n💸 Funding incentive pools...");
+
+  // Fund marketing budget for referrals (10 BNB)
+  const marketingFunding = hre.ethers.parseEther("10");
+  await feeManager.fundMarketingBudget({ value: marketingFunding });
+  console.log("✅ Marketing budget funded with 10 BNB");
+
+  // Fund streak reward pool (5 BNB)
+  const streakFunding = hre.ethers.parseEther("5");
+  await feeManager.fundStreakRewardPool({ value: streakFunding });
+  console.log("✅ Streak reward pool funded with 5 BNB");
 
   // ============ Deploy Game Contracts ============
 
-  // 5. Deploy RockPaperScissors
+  // 6. Deploy RockPaperScissors
   console.log("\n🎮 Deploying RockPaperScissors game...");
   const RockPaperScissors = await hre.ethers.getContractFactory("RockPaperScissors");
   const rpsGame = await RockPaperScissors.deploy(gameRegistryAddress, oracleCoreAddress);
@@ -101,7 +125,7 @@ async function main() {
 
   // ============ Deploy Prediction Market ============
 
-  // 6. Deploy RPSPredictionMarket
+  // 7. Deploy RPSPredictionMarket
   console.log("\n📊 Deploying RPSPredictionMarket...");
   const RPSPredictionMarket = await hre.ethers.getContractFactory("RPSPredictionMarket");
   const predictionMarket = await RPSPredictionMarket.deploy(oracleCoreAddress, feeManagerAddress);
@@ -121,8 +145,9 @@ async function main() {
       core: {
         GameRegistry: gameRegistryAddress,
         OracleCore: oracleCoreAddress,
-        FeeManager: feeManagerAddress,
-        DisputeResolver: disputeResolverAddress
+        FeeManagerV2: feeManagerAddress,
+        DisputeResolver: disputeResolverAddress,
+        PredictToken: predictTokenAddress
       },
       games: {
         RockPaperScissors: rpsGameAddress
@@ -136,10 +161,11 @@ async function main() {
     },
     configuration: {
       minimumStake: hre.ethers.formatEther(MINIMUM_STAKE) + " BNB",
-      queryFee: hre.ethers.formatEther(QUERY_FEE) + " BNB",
+      queryFee: hre.ethers.formatEther(QUERY_FEE) + " BNB (~$2.00)",
       challengeStake: hre.ethers.formatEther(CHALLENGE_STAKE) + " BNB",
       disputeWindow: "15 minutes",
-      freeTierDailyLimit: 50,
+      freeTrialLimit: 5,
+      developerPremiumMax: "30%",
       platformFee: "2% (200 basis points)",
       revenueplit: "80% dev / 15% protocol / 5% disputers"
     },
@@ -150,8 +176,20 @@ async function main() {
       "Oracle-based result resolution",
       "Prepaid query balances with volume bonuses",
       "15-minute dispute window",
-      "Free tier: 50 queries/day"
-    ]
+      "Free trial: 5 unique matches (lifetime)",
+      "Per-consumer per-match payment (subsequent queries FREE)",
+      "Dynamic pricing: Developer premium (0-30%)",
+      "Tipping system (100% to developers)",
+      "Referral program (20% referee, 10% referrer)",
+      "Streak rewards (7/14/30/60/90 days)",
+      "Lucky draw lottery (weekly prizes)",
+      "Developer launch bonus (first 100 games)",
+      "PREDICT token airdrops"
+    ],
+    incentivePools: {
+      marketingBudget: "10 BNB (for referrals)",
+      streakRewardPool: "5 BNB (for daily streaks)"
+    }
   };
 
   // Create deployments directory
@@ -183,6 +221,7 @@ NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS=${predictionMarketAddress}
 NEXT_PUBLIC_ORACLE_CORE_ADDRESS=${oracleCoreAddress}
 NEXT_PUBLIC_GAME_REGISTRY_ADDRESS=${gameRegistryAddress}
 NEXT_PUBLIC_FEE_MANAGER_ADDRESS=${feeManagerAddress}
+NEXT_PUBLIC_PREDICT_TOKEN_ADDRESS=${predictTokenAddress}
 
 # WalletConnect Project ID (get from https://cloud.walletconnect.com/)
 NEXT_PUBLIC_WC_PROJECT_ID=your_project_id_here
@@ -206,8 +245,9 @@ NEXT_PUBLIC_BSC_MAINNET_RPC=https://bsc-dataseed.binance.org/
   console.log("-------------------");
   console.log("GameRegistry:       ", gameRegistryAddress);
   console.log("OracleCore:         ", oracleCoreAddress);
-  console.log("FeeManager:         ", feeManagerAddress);
+  console.log("FeeManagerV2:       ", feeManagerAddress);
   console.log("DisputeResolver:    ", disputeResolverAddress);
+  console.log("PredictToken:       ", predictTokenAddress);
 
   console.log("\n🎮 Game Contracts:");
   console.log("-------------------");
@@ -221,12 +261,23 @@ NEXT_PUBLIC_BSC_MAINNET_RPC=https://bsc-dataseed.binance.org/
   console.log("\n⚙️  Configuration:");
   console.log("-------------------");
   console.log("Minimum Stake:      ", hre.ethers.formatEther(MINIMUM_STAKE), "BNB");
-  console.log("Query Fee:          ", hre.ethers.formatEther(QUERY_FEE), "BNB (~$1.80)");
+  console.log("Query Fee:          ", hre.ethers.formatEther(QUERY_FEE), "BNB (~$2.00)");
   console.log("Challenge Stake:    ", hre.ethers.formatEther(CHALLENGE_STAKE), "BNB");
-  console.log("Free Tier:          ", "50 queries/day");
+  console.log("Free Trial:         ", "5 matches (lifetime)");
+  console.log("Developer Premium:  ", "0-30% markup");
   console.log("Dispute Window:     ", "15 minutes");
   console.log("Platform Fee:       ", "2% (prediction market)");
   console.log("Revenue Split:      ", "80% dev / 15% protocol / 5% disputers");
+
+  console.log("\n🎁 Incentive Systems:");
+  console.log("-------------------");
+  console.log("Marketing Budget:   ", hre.ethers.formatEther(marketingFunding), "BNB (referrals)");
+  console.log("Streak Pool:        ", hre.ethers.formatEther(streakFunding), "BNB (daily rewards)");
+  console.log("Referral Bonus:     ", "20% referee / 10% referrer (one-time)");
+  console.log("Streak Rewards:     ", "7/14/30/60/90 days tiers");
+  console.log("Lucky Draw:         ", "Weekly lottery (1% of query fees)");
+  console.log("Launch Bonus:       ", "First 100 games get 90% for 90 days");
+  console.log("PREDICT Tokens:     ", "1B total (40% airdrop allocation)");
 
   console.log("\n📚 Next Steps:");
   console.log("-------------------");

@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./GameRegistry.sol";
 import "./OracleCore.sol";
-import "./FeeManager.sol";
+import "./FeeManagerV2.sol";
 
 /**
  * @title DisputeResolver
@@ -61,8 +61,8 @@ contract DisputeResolver is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPS
     /// @notice Reference to OracleCore
     OracleCore public oracleCore;
 
-    /// @notice Reference to FeeManager
-    FeeManager public feeManager;
+    /// @notice Reference to FeeManagerV2
+    FeeManagerV2 public feeManager;
 
     /// @notice Mapping of disputeId to Dispute
     mapping(bytes32 => Dispute) public disputes;
@@ -155,7 +155,7 @@ contract DisputeResolver is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPS
 
         gameRegistry = GameRegistry(_gameRegistry);
         oracleCore = OracleCore(_oracleCore);
-        feeManager = FeeManager(_feeManager);
+        feeManager = FeeManagerV2(_feeManager);
         challengeStake = _challengeStake; // 0.2 BNB
     }
 
@@ -282,9 +282,10 @@ contract DisputeResolver is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPS
             dispute.status = DisputeStatus.Rejected;
             totalRejected++;
 
-            // Challenger loses stake - add to disputer pool
+            // Challenger loses stake - send to FeeManager
             // (This incentivizes only valid disputes)
-            feeManager.addToDisputerPool{value: dispute.stakeAmount}();
+            (bool success, ) = payable(address(feeManager)).call{value: dispute.stakeAmount}("");
+            require(success, "Transfer to FeeManager failed");
 
             // Increase game reputation slightly for false accusation
             GameRegistry.Game memory game = gameRegistry.getGame(dispute.gameId);
@@ -473,11 +474,11 @@ contract DisputeResolver is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPS
     }
 
     /**
-     * @notice Update FeeManager address
-     * @param _feeManager New FeeManager address
+     * @notice Update FeeManagerV2 address
+     * @param _feeManager New FeeManagerV2 address
      */
     function updateFeeManager(address _feeManager) external onlyOwner {
-        feeManager = FeeManager(payable(_feeManager));
+        feeManager = FeeManagerV2(payable(_feeManager));
     }
 
     // ============ Internal Functions ============

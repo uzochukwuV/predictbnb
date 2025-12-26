@@ -2,7 +2,7 @@
 pragma solidity ^0.8.22;
 
 import "../OracleCore.sol";
-import "../FeeManager.sol";
+import "../FeeManagerV2.sol";
 
 /**
  * @title RPSPredictionMarket
@@ -37,7 +37,7 @@ contract RPSPredictionMarket {
     // ============ State Variables ============
 
     OracleCore public oracleCore;
-    FeeManager public feeManager;
+    FeeManagerV2 public feeManager;
 
     uint256 public marketCounter;
     uint256 public constant PLATFORM_FEE = 200; // 2% = 200 basis points
@@ -105,7 +105,7 @@ contract RPSPredictionMarket {
 
     constructor(address _oracleCore, address payable _feeManager) {
         oracleCore = OracleCore(_oracleCore);
-        feeManager = FeeManager(_feeManager);
+        feeManager = FeeManagerV2(_feeManager);
         owner = msg.sender;
     }
 
@@ -275,7 +275,7 @@ contract RPSPredictionMarket {
         if (msg.value == 0) revert InvalidBetAmount();
 
         // Deposit to FeeManager for oracle queries
-        feeManager.depositBalance{value: msg.value}();
+        feeManager.depositBalance{value: msg.value}(address(0));
 
         emit OracleBalanceFunded(msg.value);
     }

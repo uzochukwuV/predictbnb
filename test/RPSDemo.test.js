@@ -8,7 +8,7 @@ describe("🎮 RPS + Prediction Market Demo", function () {
   let deployer, player1, player2, bettor1, bettor2, bettor3;
 
   const MINIMUM_STAKE = ethers.parseEther("0.1");
-  const QUERY_FEE = ethers.parseEther("0.003");
+  const QUERY_FEE = ethers.parseEther("0.00416"); // $2.00 at $480/BNB
   const CHALLENGE_STAKE = ethers.parseEther("0.2");
 
   before(async function () {
@@ -37,9 +37,9 @@ describe("🎮 RPS + Prediction Market Demo", function () {
     gameRegistry = await upgrades.deployProxy(GameRegistry, [MINIMUM_STAKE], { kind: "uups" });
     console.log("✅ GameRegistry deployed");
 
-    const FeeManager = await ethers.getContractFactory("FeeManager");
-    feeManager = await upgrades.deployProxy(FeeManager, [await gameRegistry.getAddress(), QUERY_FEE], { kind: "uups" });
-    console.log("✅ FeeManager deployed");
+    const FeeManagerV2 = await ethers.getContractFactory("FeeManagerV2");
+    feeManager = await upgrades.deployProxy(FeeManagerV2, [await gameRegistry.getAddress(), QUERY_FEE], { kind: "uups" });
+    console.log("✅ FeeManagerV2 deployed");
 
     const OracleCore = await ethers.getContractFactory("OracleCore");
     oracleCore = await upgrades.deployProxy(OracleCore, [await gameRegistry.getAddress(), await feeManager.getAddress()], { kind: "uups" });

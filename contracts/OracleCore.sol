@@ -5,7 +5,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./GameRegistry.sol";
-import "./FeeManager.sol";
+import "./FeeManagerV2.sol";
 
 /**
  * @title OracleCore
@@ -47,8 +47,8 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /// @notice Reference to GameRegistry contract
     GameRegistry public gameRegistry;
 
-    /// @notice Reference to FeeManager contract
-    FeeManager public feeManager;
+    /// @notice Reference to FeeManagerV2 contract
+    FeeManagerV2 public feeManager;
 
     /// @notice Reference to DisputeResolver contract
     address public disputeResolver;
@@ -134,7 +134,7 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         __UUPSUpgradeable_init();
 
         gameRegistry = GameRegistry(_gameRegistry);
-        feeManager = FeeManager(_feeManager);
+        feeManager = FeeManagerV2(_feeManager);
     }
 
     // ============ External Functions ============
@@ -247,11 +247,12 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         resultFinalized(matchId)
         returns (bytes32)
     {
+        // Note: We don't check if value is bytes32(0) because zero is a valid value
+        // (e.g., address(0) for TIE in prediction markets)
         bytes32 value = quickFields[matchId][fieldHash];
-        if (value == bytes32(0)) revert FieldNotFound();
 
-        // Charge query fee
-        feeManager.chargeQueryFee(msg.sender, results[matchId].gameId);
+        // Charge query fee (once per consumer per match)
+        feeManager.chargeQueryFee(msg.sender, results[matchId].gameId, matchId);
 
         emit ResultQueried(matchId, msg.sender, true, feeManager.queryFee());
 
@@ -273,8 +274,8 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     {
         Result memory result = results[matchId];
 
-        // Charge query fee
-        feeManager.chargeQueryFee(msg.sender, result.gameId);
+        // Charge query fee (once per consumer per match)
+        feeManager.chargeQueryFee(msg.sender, result.gameId, matchId);
 
         emit ResultQueried(matchId, msg.sender, false, feeManager.queryFee());
 
@@ -373,7 +374,7 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param _feeManager New FeeManager address
      */
     function updateFeeManager(address payable _feeManager) external onlyOwner {
-        feeManager = FeeManager(_feeManager);
+        feeManager = FeeManagerV2(_feeManager);
     }
 
     /**

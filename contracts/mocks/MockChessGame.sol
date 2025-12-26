@@ -3,6 +3,7 @@ pragma solidity ^0.8.22;
 
 import "../GameRegistry.sol";
 import "../OracleCore.sol";
+import "../FeeManagerV2.sol";
 import "../libraries/OracleSubmissionHelper.sol";
 
 /**
@@ -156,7 +157,7 @@ contract MockChessGame {
     function withdrawEarnings(address payable feeManagerAddress, address recipient) external {
         require(gameId != bytes32(0), "Game not registered");
 
-        FeeManager feeManager = FeeManager(feeManagerAddress);
+        FeeManagerV2 feeManager = FeeManagerV2(feeManagerAddress);
         feeManager.withdrawEarnings(gameId);
 
         // Transfer to recipient

@@ -88,6 +88,13 @@ export function HeroSection() {
         </p>
 
         <div className="mt-16 flex items-center gap-8 flex-wrap">
+          <Link
+            href="/console"
+            className="group inline-flex items-center gap-3 border border-accent bg-accent/10 px-8 py-4 font-mono text-sm uppercase tracking-widest text-accent hover:bg-accent hover:text-background transition-all duration-200"
+          >
+            <ScrambleTextOnHover text="Go to Console" as="span" duration={0.6} />
+            <BitmapChevron className="transition-transform duration-[400ms] ease-in-out group-hover:rotate-45" />
+          </Link>
           <a
             href="#how-it-works"
             className="group inline-flex items-center gap-3 border border-foreground/20 px-6 py-3 font-mono text-xs uppercase tracking-widest text-foreground hover:border-accent hover:text-accent transition-all duration-200"

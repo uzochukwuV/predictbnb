@@ -3,7 +3,7 @@ pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../OracleCore.sol";
-import "../FeeManager.sol";
+import "../FeeManagerV2.sol";
 import "../libraries/OracleSubmissionHelper.sol";
 
 /**
@@ -50,7 +50,7 @@ contract SimplePredictionMarket is ReentrancyGuard {
     // ============ State Variables ============
 
     OracleCore public oracleCore;
-    FeeManager public feeManager;
+    FeeManagerV2 public feeManager;
 
     mapping(bytes32 => Market) public markets;
     mapping(bytes32 => mapping(address => Bet)) public bets;
@@ -92,7 +92,7 @@ contract SimplePredictionMarket is ReentrancyGuard {
 
     constructor(address _oracleCore, address payable _feeManager) {
         oracleCore = OracleCore(_oracleCore);
-        feeManager = FeeManager(_feeManager);
+        feeManager = FeeManagerV2(_feeManager);
     }
 
     // ============ External Functions ============
@@ -360,7 +360,7 @@ contract SimplePredictionMarket is ReentrancyGuard {
      * @notice Fund this contract's prepaid oracle balance
      */
     function fundOracleBalance() external payable {
-        feeManager.depositBalance{value: msg.value}();
+        feeManager.depositBalance{value: msg.value}(address(0));
     }
 
     // Allow contract to receive BNB
