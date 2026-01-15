@@ -34,6 +34,15 @@ module.exports = {
       chainId: 5611,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
+    tenderlyVirtual: {
+      url: "https://virtual.mainnet.eu.rpc.tenderly.co/82c86106-662e-4d7f-a974-c311987358ff",
+      // chainId: 1, // Mainnet fork
+      accounts: process.env.PRIVATE_KEY_TESTNET ? [process.env.PRIVATE_KEY_TESTNET] : [],
+    },
+    mantleSepolia: {
+            url: "https://rpc.sepolia.mantle.xyz", // Sepolia Testnet
+            accounts: [process.env.PRIVATE_KEY_TESTNET ?? ""],
+        },
   },
   etherscan: {
     apiKey: {

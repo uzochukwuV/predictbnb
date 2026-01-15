@@ -18,8 +18,8 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
     GameRegistry public gameRegistry;
     bytes32 public gameId;
 
-    // Team names (10 teams)
-    string[10] public teamNames;
+    // Team names (20 teams)
+    string[20] public teamNames;
 
     // Season management
     uint32 public currentSeasonId;
@@ -33,8 +33,11 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
     mapping(bytes32 => uint64) public oracleMatchIdToGameMatchId; // oracle matchId => game matchId
 
     // Constants
-    uint64 public constant SEASON_DURATION = 1 days; // Shortened for MVP
-    uint64 public constant MATCH_INTERVAL = 10 minutes;
+    uint64 public constant SEASON_DURATION = 36 days; // 36 rounds
+    uint64 public constant ROUND_INTERVAL = 1 days; // Time between rounds
+    uint64 public constant MATCH_INTERVAL = 2 hours; // Time between matches in a round (for simulation purposes)
+    uint8 public constant TEAMS_COUNT = 20;
+    uint8 public constant ROUNDS_COUNT = 36; // Double round-robin (each team plays each other twice)
 
     // ============ Constructor ============
 
@@ -45,7 +48,7 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
         oracleCore = OracleCore(_oracleCore);
         gameRegistry = GameRegistry(_gameRegistry);
 
-        // Initialize team names
+        // Initialize 20 Premier League team names
         teamNames[0] = "Manchester City";
         teamNames[1] = "Arsenal";
         teamNames[2] = "Liverpool";
@@ -56,6 +59,16 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
         teamNames[7] = "Brighton";
         teamNames[8] = "Aston Villa";
         teamNames[9] = "West Ham";
+        teamNames[10] = "Brentford";
+        teamNames[11] = "Fulham";
+        teamNames[12] = "Crystal Palace";
+        teamNames[13] = "Wolves";
+        teamNames[14] = "Everton";
+        teamNames[15] = "Bournemouth";
+        teamNames[16] = "Nottingham Forest";
+        teamNames[17] = "Luton Town";
+        teamNames[18] = "Burnley";
+        teamNames[19] = "Sheffield United";
     }
 
     // ============ External Functions ============
@@ -66,9 +79,12 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
     function registerGame() external payable onlyOwner {
         require(gameId == bytes32(0), "Already registered");
 
+        // Register with owner as developer, this contract as game contract
         bytes32 newGameId = gameRegistry.registerGame{value: msg.value}(
             "Virtual Football",
-            "Automated virtual football with 10 Premier League teams"
+            "Automated virtual football with 20 Premier League teams",
+            owner() ,// Pass owner as the developer
+            address(this) // This contract as game contract
         );
 
         gameId = newGameId;
@@ -95,7 +111,7 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
     }
 
     /**
-     * @notice Start a season and generate all matches
+     * @notice Start a season (bot will create matches round by round)
      */
     function startSeason(uint32 seasonId) external {
         Season storage season = seasons[seasonId];
@@ -105,10 +121,100 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
 
         season.status = SeasonStatus.ACTIVE;
 
-        // Generate all matches for the season
-        _generateSeasonMatches(seasonId);
-
         emit SeasonStarted(seasonId);
+    }
+
+    /**
+     * @notice Create a single match (called by automation bot)
+     * @param seasonId The season ID
+     * @param homeTeam Home team ID (0-19)
+     * @param awayTeam Away team ID (0-19)
+     * @param kickoffTime When the match starts
+     */
+    function createMatch(
+        uint32 seasonId,
+        uint8 homeTeam,
+        uint8 awayTeam,
+        uint64 kickoffTime
+    ) external returns (uint64) {
+        Season storage season = seasons[seasonId];
+        require(season.status == SeasonStatus.ACTIVE, "Season not active");
+        require(homeTeam < TEAMS_COUNT && awayTeam < TEAMS_COUNT, "Invalid team");
+        require(homeTeam != awayTeam, "Same team");
+
+        matchCounter++;
+        uint64 matchId = matchCounter;
+
+        Match storage newMatch = matches[matchId];
+        newMatch.matchId = matchId;
+        newMatch.seasonId = seasonId;
+        newMatch.homeTeam = homeTeam;
+        newMatch.awayTeam = awayTeam;
+        newMatch.kickoffTime = kickoffTime;
+
+        // Schedule with oracle
+        bytes32 oracleMatchId = _scheduleMatchWithOracle(matchId, newMatch, kickoffTime);
+        newMatch.oracleMatchId = oracleMatchId;
+        oracleMatchIdToGameMatchId[oracleMatchId] = matchId;
+
+        seasonMatches[seasonId].push(matchId);
+        season.totalMatches++;
+
+        emit MatchCreated(matchId, seasonId, homeTeam, awayTeam, kickoffTime);
+
+        return matchId;
+    }
+
+    /**
+     * @notice Batch create matches for a round (called by automation bot)
+     * @param seasonId The season ID
+     * @param homeTeams Array of home team IDs (0-19)
+     * @param awayTeams Array of away team IDs (0-19)
+     * @param baseKickoffTime The kickoff time for the first match
+     * @return matchIds Array of created match IDs
+     * @dev Creates multiple matches with staggered kickoff times (MATCH_INTERVAL apart)
+     */
+    function createMatches(
+        uint32 seasonId,
+        uint8[] calldata homeTeams,
+        uint8[] calldata awayTeams,
+        uint64 baseKickoffTime
+    ) external returns (uint64[] memory matchIds) {
+        require(homeTeams.length == awayTeams.length, "Array length mismatch");
+        require(homeTeams.length > 0 && homeTeams.length <= 10, "Invalid match count");
+
+        Season storage season = seasons[seasonId];
+        require(season.status == SeasonStatus.ACTIVE, "Season not active");
+
+        matchIds = new uint64[](homeTeams.length);
+
+        for (uint256 i = 0; i < homeTeams.length; i++) {
+            require(homeTeams[i] < TEAMS_COUNT && awayTeams[i] < TEAMS_COUNT, "Invalid team");
+            require(homeTeams[i] != awayTeams[i], "Same team");
+
+            matchCounter++;
+            matchIds[i] = matchCounter;
+
+            Match storage newMatch = matches[matchCounter];
+            newMatch.matchId = matchCounter;
+            newMatch.seasonId = seasonId;
+            newMatch.homeTeam = homeTeams[i];
+            newMatch.awayTeam = awayTeams[i];
+            newMatch.kickoffTime = baseKickoffTime + (uint64(i) * MATCH_INTERVAL);
+
+            // Schedule with oracle
+            newMatch.oracleMatchId = _scheduleMatchWithOracle(
+                matchCounter,
+                newMatch,
+                newMatch.kickoffTime
+            );
+            oracleMatchIdToGameMatchId[newMatch.oracleMatchId] = matchCounter;
+
+            seasonMatches[seasonId].push(matchCounter);
+            season.totalMatches++;
+
+            emit MatchCreated(matchCounter, seasonId, homeTeams[i], awayTeams[i], newMatch.kickoffTime);
+        }
     }
 
     /**
@@ -177,7 +283,7 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
     }
 
     function getTeamName(uint8 teamId) external view returns (string memory) {
-        require(teamId < 10, "Invalid team ID");
+        require(teamId < 20, "Invalid team ID");
         return teamNames[teamId];
     }
 
@@ -186,47 +292,6 @@ contract VirtualFootballGame is IVirtualFootballGame, Ownable {
     }
 
     // ============ Internal Functions ============
-
-    /**
-     * @notice Generate matches for a season
-     * @dev Creates 20 matches with 10-minute intervals, schedules all with oracle upfront
-     */
-    function _generateSeasonMatches(uint32 seasonId) internal {
-        Season storage season = seasons[seasonId];
-        // Start matches 5 minutes after season begins to ensure they're in the future
-        uint64 currentTime = uint64(block.timestamp) + 5 minutes;
-        uint64 matchId = matchCounter;
-
-        // Generate 20 matches (can be random matchups or round-robin subset)
-        for (uint8 i = 0; i < 20; i++) {
-            matchId++;
-
-            // Simple matchup: alternate between different teams
-            uint8 homeTeam = i % 10;
-            uint8 awayTeam = (i + 5) % 10; // Ensures different team
-
-            Match storage newMatch = matches[matchId];
-            newMatch.matchId = matchId;
-            newMatch.seasonId = seasonId;
-            newMatch.homeTeam = homeTeam;
-            newMatch.awayTeam = awayTeam;
-            newMatch.kickoffTime = currentTime;
-
-            // Schedule with oracle immediately (gas-efficient for 20 matches)
-            bytes32 oracleMatchId = _scheduleMatchWithOracle(matchId, newMatch, currentTime);
-            newMatch.oracleMatchId = oracleMatchId;
-            oracleMatchIdToGameMatchId[oracleMatchId] = matchId;
-
-            seasonMatches[seasonId].push(matchId);
-            season.totalMatches++;
-
-            emit MatchCreated(matchId, seasonId, homeTeam, awayTeam, currentTime);
-
-            currentTime += MATCH_INTERVAL;
-        }
-
-        matchCounter = matchId;
-    }
 
     /**
      * @notice Schedule a match with the oracle (called when match is created)

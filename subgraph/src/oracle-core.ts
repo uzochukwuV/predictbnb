@@ -23,27 +23,30 @@ export function handleResultSubmitted(event: ResultSubmitted): void {
   result.encodedData = new Uint8Array(0); // Will be populated if needed
   result.decodeSchema = "";
   result.submittedAt = event.params.submittedAt;
+  result.finalizedAt = null;
   result.isFinalized = false;
   result.isDisputed = false;
   result.createdAt = event.block.timestamp;
 
   result.save();
 
-  // Update protocol stats
-  let stats = ProtocolStats.load("protocol");
-  if (stats != null) {
-    stats.totalResults = stats.totalResults + 1;
-    stats.updatedAt = event.block.timestamp;
-    stats.save();
+  // Update match
+  let match = Match.load(event.params.matchId.toHex());
+  if (match != null) {
+    match.hasResult = true;
+    match.save();
   }
 
+  // Update protocol stats
+  let stats = getOrCreateProtocolStats();
+  stats.totalResults = stats.totalResults + 1;
+  stats.updatedAt = event.block.timestamp;
+  stats.save();
+
   // Update daily stats
-  let dayTimestamp = event.block.timestamp.toI32() / 86400 * 86400;
-  let dailyStats = DailyStats.load(dayTimestamp.toString());
-  if (dailyStats != null) {
-    dailyStats.resultsSubmitted = dailyStats.resultsSubmitted + 1;
-    dailyStats.save();
-  }
+  let dailyStats = getOrCreateDailyStats(event.block.timestamp);
+  dailyStats.resultsSubmitted = dailyStats.resultsSubmitted + 1;
+  dailyStats.save();
 }
 
 export function handleResultFinalized(event: ResultFinalized): void {
@@ -111,4 +114,45 @@ export function handleDisputeInitiated(event: DisputeInitiated): void {
     result.isDisputed = true;
     result.save();
   }
+}
+
+// ============ Helper Functions ============
+
+function getOrCreateProtocolStats(): ProtocolStats {
+  let stats = ProtocolStats.load("protocol");
+
+  if (stats == null) {
+    stats = new ProtocolStats("protocol");
+    stats.totalGames = 0;
+    stats.totalMatches = 0;
+    stats.totalResults = 0;
+    stats.totalQueries = BigInt.fromI32(0);
+    stats.totalRevenue = BigInt.fromI32(0);
+    stats.protocolBalance = BigInt.fromI32(0);
+    stats.disputerPoolBalance = BigInt.fromI32(0);
+    stats.updatedAt = BigInt.fromI32(0);
+  }
+
+  return stats as ProtocolStats;
+}
+
+function getOrCreateDailyStats(timestamp: BigInt): DailyStats {
+  // Get day start timestamp (midnight UTC)
+  let dayTimestamp = timestamp.toI32() / 86400 * 86400;
+  let id = dayTimestamp.toString();
+
+  let stats = DailyStats.load(id);
+
+  if (stats == null) {
+    stats = new DailyStats(id);
+    stats.date = BigInt.fromI32(dayTimestamp);
+    stats.gamesRegistered = 0;
+    stats.matchesScheduled = 0;
+    stats.resultsSubmitted = 0;
+    stats.queriesMade = 0;
+    stats.revenue = BigInt.fromI32(0);
+    stats.timestamp = timestamp;
+  }
+
+  return stats as DailyStats;
 }

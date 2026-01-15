@@ -2,6 +2,7 @@ const hre = require("hardhat");
 const { upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { time } = require("console");
 
 async function main() {
   console.log("🚀 Deploying PredictBNB Full Stack (Oracle + RPS Game + Prediction Market)...\n");
@@ -31,6 +32,8 @@ async function main() {
   const gameRegistryAddress = await gameRegistry.getAddress();
   console.log("✅ GameRegistry deployed to:", gameRegistryAddress);
 
+  await Promise.resolve(time.sleep(5000)); // Wait for 5 seconds to ensure proper deployment order
+
   // 2. Deploy PredictToken (ERC-20 for airdrops)
   console.log("\n🪙 Deploying PredictToken...");
   const PredictToken = await hre.ethers.getContractFactory("PredictToken");
@@ -38,7 +41,7 @@ async function main() {
   await predictToken.waitForDeployment();
   const predictTokenAddress = await predictToken.getAddress();
   console.log("✅ PredictToken deployed to:", predictTokenAddress);
-
+await Promise.resolve(time.sleep(5000));
   // 3. Deploy FeeManagerV2 (Enhanced with incentives)
   console.log("\n💰 Deploying FeeManagerV2 (UUPS Proxy)...");
   const FeeManagerV2 = await hre.ethers.getContractFactory("FeeManagerV2");
@@ -50,6 +53,8 @@ async function main() {
   await feeManager.waitForDeployment();
   const feeManagerAddress = await feeManager.getAddress();
   console.log("✅ FeeManagerV2 deployed to:", feeManagerAddress);
+
+  await Promise.resolve(time.sleep(5000));
 
   // 4. Deploy OracleCore
   console.log("\n🔮 Deploying OracleCore (UUPS Proxy)...");
@@ -63,6 +68,8 @@ async function main() {
   const oracleCoreAddress = await oracleCore.getAddress();
   console.log("✅ OracleCore deployed to:", oracleCoreAddress);
 
+  await Promise.resolve(time.sleep(5000));
+
   // 5. Deploy DisputeResolver
   console.log("\n⚖️  Deploying DisputeResolver (UUPS Proxy)...");
   const DisputeResolver = await hre.ethers.getContractFactory("DisputeResolver");
@@ -75,6 +82,8 @@ async function main() {
   const disputeResolverAddress = await disputeResolver.getAddress();
   console.log("✅ DisputeResolver deployed to:", disputeResolverAddress);
 
+  await Promise.resolve(time.sleep(5000));
+
   // ============ Connect all contracts ============
   console.log("\n🔗 Connecting contract references...");
   await oracleCore.updateDisputeResolver(disputeResolverAddress);
@@ -82,6 +91,8 @@ async function main() {
   await gameRegistry.updateOracleCore(oracleCoreAddress);
   await feeManager.updateDisputeResolver(disputeResolverAddress);
   await feeManager.updateOracleCore(oracleCoreAddress);
+
+  await Promise.resolve(time.sleep(5000));
 
   // Connect PredictToken to FeeManagerV2
   await predictToken.setFeeManager(feeManagerAddress);
@@ -91,12 +102,14 @@ async function main() {
   console.log("\n💸 Funding incentive pools...");
 
   // Fund marketing budget for referrals (10 BNB)
-  const marketingFunding = hre.ethers.parseEther("10");
+  const marketingFunding = hre.ethers.parseEther("0.001");
   await feeManager.fundMarketingBudget({ value: marketingFunding });
   console.log("✅ Marketing budget funded with 10 BNB");
 
+  await Promise.resolve(time.sleep(5000));
+
   // Fund streak reward pool (5 BNB)
-  const streakFunding = hre.ethers.parseEther("5");
+  const streakFunding = hre.ethers.parseEther("0.0005");
   await feeManager.fundStreakRewardPool({ value: streakFunding });
   console.log("✅ Streak reward pool funded with 5 BNB");
 

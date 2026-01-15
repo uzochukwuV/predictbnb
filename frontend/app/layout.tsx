@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { IBM_Plex_Sans, IBM_Plex_Mono, Bebas_Neue } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { SmoothScroll } from "@/components/smooth-scroll"
+import { WalletWidget } from "@/components/wallet-widget"
 import { Web3Providers } from "@/lib/providers"
 import "./globals.css"
 
@@ -55,6 +56,7 @@ export default function RootLayout({
         <div className="noise-overlay" aria-hidden="true" />
         <Web3Providers>
           <SmoothScroll>{children}</SmoothScroll>
+          <WalletWidget />
         </Web3Providers>
         <Analytics />
       </body>

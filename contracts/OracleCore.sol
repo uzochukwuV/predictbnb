@@ -65,6 +65,22 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /// @notice Total number of finalized results
     uint256 public totalFinalized;
 
+    /// @notice Total number of disputed results
+    uint256 public totalDisputed;
+
+    /// @notice Per-game statistics struct
+    struct GameStats {
+        uint32 totalResults;
+        uint32 finalizedResults;
+        uint32 disputedResults;
+    }
+
+    /// @notice Mapping of gameId to game statistics
+    mapping(bytes32 => GameStats) public gameStats;
+
+    /// @notice Mapping of gameId to array of resultIds (matchIds)
+    mapping(bytes32 => bytes32[]) public gameResults;
+
     // ============ Events ============
 
     event ResultSubmitted(
@@ -200,6 +216,10 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
 
         totalResults++;
 
+        // Track per-game stats
+        gameStats[matchData.gameId].totalResults++;
+        gameResults[matchData.gameId].push(matchId);
+
         // Mark result as submitted in registry
         gameRegistry.markResultSubmitted(matchId);
 
@@ -231,6 +251,9 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         result.isFinalized = true;
         result.finalizedAt = uint64(block.timestamp);
         totalFinalized++;
+
+        // Track per-game stats
+        gameStats[result.gameId].finalizedResults++;
 
         emit ResultFinalized(matchId, result.gameId, uint64(block.timestamp));
     }
@@ -345,6 +368,9 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
                 result.finalizedAt = uint64(block.timestamp);
                 totalFinalized++;
 
+                // Track per-game stats
+                gameStats[result.gameId].finalizedResults++;
+
                 emit ResultFinalized(matchId, result.gameId, uint64(block.timestamp));
             }
         }
@@ -358,7 +384,15 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     function markResultDisputed(bytes32 matchId) external resultExists(matchId) {
         if (msg.sender != disputeResolver && msg.sender != owner()) revert Unauthorized();
-        results[matchId].isDisputed = true;
+        Result storage result = results[matchId];
+
+        if (!result.isDisputed) {
+            result.isDisputed = true;
+            totalDisputed++;
+
+            // Track per-game stats
+            gameStats[result.gameId].disputedResults++;
+        }
     }
 
     /**
@@ -385,7 +419,134 @@ contract OracleCore is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         disputeResolver = _disputeResolver;
     }
 
+    // ============ View Functions (New) ============
+
+    /**
+     * @notice Get statistics for a specific game
+     * @param gameId The game identifier
+     * @return _totalResults Total results submitted for this game
+     * @return _finalizedResults Number of finalized results
+     * @return _disputedResults Number of disputed results
+     */
+    function getGameStats(bytes32 gameId)
+        external
+        view
+        returns (
+            uint256 _totalResults,
+            uint256 _finalizedResults,
+            uint256 _disputedResults
+        )
+    {
+        GameStats memory stats = gameStats[gameId];
+        return (stats.totalResults, stats.finalizedResults, stats.disputedResults);
+    }
+
+    /**
+     * @notice Get all results for a specific game
+     * @param gameId The game identifier
+     * @return Array of matchIds with results for this game
+     */
+    function getGameResults(bytes32 gameId) external view returns (bytes32[] memory) {
+        return gameResults[gameId];
+    }
+
+    /**
+     * @notice Get result for a specific game and matchId
+     * @param gameId The game identifier (for context validation)
+     * @param matchId The match identifier
+     * @return Result details
+     */
+    function getGameResult(bytes32 gameId, bytes32 matchId)
+        external
+        view
+        resultExists(matchId)
+        returns (Result memory)
+    {
+        Result memory result = results[matchId];
+        require(result.gameId == gameId, "Result not from this game");
+        return result;
+    }
+
+    /**
+     * @notice Get global oracle statistics
+     * @return _totalResults Total results across all games
+     * @return _totalFinalized Total finalized results
+     * @return _totalDisputed Total disputed results
+     */
+    function getGlobalStats()
+        external
+        view
+        returns (
+            uint256 _totalResults,
+            uint256 _totalFinalized,
+            uint256 _totalDisputed
+        )
+    {
+        return (totalResults, totalFinalized, totalDisputed);
+    }
+
+    /**
+     * @notice Batch get results
+     * @param matchIds Array of match identifiers
+     * @return Array of Result structs
+     */
+    function getResultsBatch(bytes32[] calldata matchIds) external view returns (Result[] memory) {
+        Result[] memory batchResults = new Result[](matchIds.length);
+        for (uint256 i = 0; i < matchIds.length; i++) {
+            batchResults[i] = results[matchIds[i]];
+        }
+        return batchResults;
+    }
+
+    /**
+     * @notice Get pending results (not yet finalized)
+     * @param gameId The game identifier (address(0) for all games)
+     * @param limit Maximum number of pending results to return
+     * @return Array of matchIds with pending results
+     */
+    function getPendingResults(bytes32 gameId, uint256 limit)
+        external
+        view
+        returns (bytes32[] memory)
+    {
+        bytes32[] memory gameMatchIds = gameId != bytes32(0)
+            ? gameResults[gameId]
+            : _getAllResultIds();
+
+        // Count pending first
+        uint256 pendingCount = 0;
+        for (uint256 i = 0; i < gameMatchIds.length && pendingCount < limit; i++) {
+            Result memory result = results[gameMatchIds[i]];
+            if (!result.isFinalized && result.submitter != address(0)) {
+                pendingCount++;
+            }
+        }
+
+        // Build result array
+        bytes32[] memory pending = new bytes32[](pendingCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < gameMatchIds.length && index < pendingCount; i++) {
+            Result memory result = results[gameMatchIds[i]];
+            if (!result.isFinalized && result.submitter != address(0)) {
+                pending[index] = gameMatchIds[i];
+                index++;
+            }
+        }
+
+        return pending;
+    }
+
     // ============ Internal Functions ============
+
+    /**
+     * @notice Internal helper to get all result IDs across all games
+     * @dev This is expensive for many games, use with caution
+     */
+    function _getAllResultIds() internal view returns (bytes32[] memory) {
+        // Note: This is a placeholder - in production you'd want to track this more efficiently
+        // For now, we'll just return empty array for "all games" queries
+        return new bytes32[](0);
+    }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 

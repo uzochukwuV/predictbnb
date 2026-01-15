@@ -164,7 +164,7 @@ contract FeeManagerV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     // ============ Events ============
 
     event BalanceDeposited(address indexed consumer, uint256 amount, uint256 bonusAmount, address referrer);
-    event QueryFeeCharged(address indexed consumer, bytes32 indexed gameId, uint256 fee, bool usedFreeTier);
+    event QueryFeeCharged(address indexed consumer, bytes32 indexed matchId, bytes32 indexed gameId, uint256 fee, bool usedFreeTier, bool isQuickField);
     event RevenueDistributed(bytes32 indexed gameId, uint256 devAmount, uint256 protocolAmount, uint256 disputerAmount);
     event EarningsWithdrawn(bytes32 indexed gameId, address indexed developer, uint256 amount);
     event ReferralBonusEarned(address indexed referrer, address indexed referee, uint256 referrerBonus, uint256 refereeBonus);
@@ -260,7 +260,7 @@ contract FeeManagerV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         // Check if this consumer already paid for this match
         if (hasPaidForMatch[consumer][matchId]) {
             // Already paid - return without charging
-            emit QueryFeeCharged(consumer, gameId, 0, true);
+            emit QueryFeeCharged(consumer, matchId, gameId, 0, true, false);
             return;
         }
 
@@ -281,7 +281,7 @@ contract FeeManagerV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
             // Update streak and lottery (even for free queries)
             _processQueryExtras(consumer, gameId);
 
-            emit QueryFeeCharged(consumer, gameId, 0, true);
+            emit QueryFeeCharged(consumer, matchId, gameId, 0, true, false);
             return;
         }
 
@@ -306,7 +306,7 @@ contract FeeManagerV2 is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         _distributeRevenue(gameId, finalFee);
         _processQueryExtras(consumer, gameId);
 
-        emit QueryFeeCharged(consumer, gameId, finalFee, false);
+        emit QueryFeeCharged(consumer, matchId, gameId, finalFee, false, false);
     }
 
     /**
