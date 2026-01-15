@@ -15,6 +15,7 @@ export function handleGameRegistered(event: GameRegistered): void {
   let game = new Game(event.params.gameId.toHex());
 
   game.developer = event.params.developer;
+  game.gameContract = event.params.gameContract;
   game.name = event.params.name;
   game.metadata = "";
   game.stakedAmount = event.params.stakedAmount;

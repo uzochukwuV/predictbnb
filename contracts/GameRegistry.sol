@@ -88,6 +88,7 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     event GameRegistered(
         bytes32 indexed gameId,
         address indexed developer,
+        address indexed gameContract,
         string name,
         uint256 stakedAmount,
         uint64 timestamp
@@ -221,7 +222,7 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         allGameIds.push(gameId);
         totalGames++;
 
-        emit GameRegistered(gameId, gameDeveloper, name, msg.value, uint64(block.timestamp));
+        emit GameRegistered(gameId, gameDeveloper, gameContract, name, msg.value, uint64(block.timestamp));
 
         return gameId;
     }
