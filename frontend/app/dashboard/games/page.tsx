@@ -1,247 +1,473 @@
 "use client"
 
 import { useState } from "react"
-import { AnimatedNoise } from "@/components/animated-noise"
-import { HighlightText } from "@/components/highlight-text"
-import { Card } from "@/components/ui/card"
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi"
+import { motion, AnimatePresence } from "framer-motion"
+import { formatEther, parseEther, type Address } from "viem"
+import { PageHeader, Card, SectionHeader, EmptyState, CardGrid } from "@/components/dashboard/layout-components"
+import { StatCard, MiniStatCard } from "@/components/dashboard/stat-card"
+import { GameListItem, DataTable } from "@/components/dashboard/data-table"
+import { ScrollReveal, ScrollRevealStagger, ScrollRevealItem } from "@/components/animations/scroll-reveal"
+import { ProgressBar } from "@/components/animations/progress-bar"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrambleTextOnHover } from "@/components/scramble-text"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerTrigger,
+  DrawerFooter,
+} from "@/components/ui/drawer"
+import {
+  GameRegistryContract,
+  FeeManagerV2Contract,
+  type GameData,
+  type DeveloperEarnings,
+} from "@/lib/contracts"
+import {
+  Gamepad2,
+  Plus,
+  Search,
+  Filter,
+  MoreVertical,
+  Eye,
+  Edit,
+  Trash2,
+  ExternalLink,
+  Wallet,
+  TrendingUp,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  ChevronRight,
+  Zap,
+  RefreshCw,
+} from "lucide-react"
 
-// Mock data - in production this would come from your smart contracts
-const gameData = {
-  totalGames: 247,
-  totalQueries: 1250000,
-  totalRevenue: 1800000,
-  averageRevenuePerGame: 7287,
-}
+export default function GamesPage() {
+  const { address, isConnected } = useAccount()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedGame, setSelectedGame] = useState<string | null>(null)
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [newGameName, setNewGameName] = useState("")
+  const [newGameMetadata, setNewGameMetadata] = useState("")
 
-const topGames = [
-  {
-    id: 1,
-    name: "Cyber Chess Arena",
-    type: "Onchain",
-    queries: 450000,
-    revenue: 648000,
-    disputeRate: 0.2,
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Battle Royale Elite",
-    type: "Traditional",
-    queries: 320000,
-    revenue: 460800,
-    disputeRate: 1.5,
-    status: "Active",
-  },
-  {
-    id: 3,
-    name: "Card Masters",
-    type: "Onchain",
-    queries: 180000,
-    revenue: 259200,
-    disputeRate: 0.1,
-    status: "Active",
-  },
-  {
-    id: 4,
-    name: "FPS Legends",
-    type: "Traditional",
-    queries: 150000,
-    revenue: 216000,
-    disputeRate: 2.3,
-    status: "Active",
-  },
-  {
-    id: 5,
-    name: "Strategy Empire",
-    type: "Hybrid",
-    queries: 85000,
-    revenue: 122400,
-    disputeRate: 0.8,
-    status: "Active",
-  },
-]
+  // Fetch developer's games
+  const { data: gameIds, refetch: refetchGames } = useReadContract({
+    ...GameRegistryContract,
+    functionName: "getDeveloperGames",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  })
 
-const recentActivity = [
-  {
-    game: "Cyber Chess Arena",
-    action: "Result Submitted",
-    matchId: "0x7a8b...92c3",
-    time: "2 min ago",
-  },
-  {
-    game: "Battle Royale Elite",
-    action: "Query Executed",
-    matchId: "0x4d2e...81f5",
-    time: "5 min ago",
-  },
-  {
-    game: "Card Masters",
-    action: "Revenue Withdrawn",
-    matchId: "0x9c1f...43a7",
-    time: "12 min ago",
-  },
-  {
-    game: "FPS Legends",
-    action: "Result Finalized",
-    matchId: "0x2b6a...15d9",
-    time: "18 min ago",
-  },
-]
+  // Register game
+  const { writeContract, isPending: isRegistering, data: registerHash } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+    hash: registerHash,
+  })
 
-export default function GamesDashboard() {
-  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "all">("30d")
+  const handleRegisterGame = () => {
+    if (!newGameName) return
+    writeContract({
+      ...GameRegistryContract,
+      functionName: "registerGame",
+      args: [newGameName, newGameMetadata || "{}"],
+      value: parseEther("0.1"),
+    })
+  }
+
+  // Demo games data (would be replaced with real contract data)
+  const demoGames = [
+    {
+      id: "0x123",
+      name: "Virtual Football League",
+      type: "Sports",
+      stake: "0.15",
+      queries: 12450,
+      revenue: "2.45",
+      reputation: 850,
+      status: "active" as const,
+      matches: 156,
+      disputes: 2,
+    },
+    {
+      id: "0x456",
+      name: "RPS Championship",
+      type: "Casual",
+      stake: "0.1",
+      queries: 8932,
+      revenue: "1.78",
+      reputation: 920,
+      status: "active" as const,
+      matches: 2341,
+      disputes: 0,
+    },
+    {
+      id: "0x789",
+      name: "CS2 Pro League",
+      type: "Esports",
+      stake: "0.5",
+      queries: 6721,
+      revenue: "1.34",
+      reputation: 780,
+      status: "active" as const,
+      matches: 89,
+      disputes: 5,
+    },
+  ]
+
+  const filteredGames = demoGames.filter((game) =>
+    game.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const totalRevenue = demoGames.reduce((sum, g) => sum + parseFloat(g.revenue), 0)
+  const totalQueries = demoGames.reduce((sum, g) => sum + g.queries, 0)
+
+  if (!isConnected) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <PageHeader
+          badge="Games"
+          title="Your Games"
+          description="Connect your wallet to view and manage your registered games."
+        />
+        <EmptyState
+          icon={Wallet}
+          title="Wallet Not Connected"
+          description="Please connect your wallet to view your games and earnings."
+          action={
+            <Button className="font-mono text-xs uppercase tracking-widest">
+              <Wallet className="w-4 h-4 mr-2" />
+              Connect Wallet
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
 
   return (
-    <main className="relative min-h-screen pl-6 md:pl-28 pr-6 md:pr-12 py-12">
-      <div className="grid-bg fixed inset-0 opacity-30" aria-hidden="true" />
-      <AnimatedNoise opacity={0.02} />
-
-      <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <HighlightText className="font-mono text-xs uppercase tracking-widest text-accent">
-            Game Analytics
-          </HighlightText>
-          <h1 className="font-[var(--font-bebas)] text-[clamp(2rem,5vw,4rem)] text-foreground mt-4 leading-none">
-            Performance Dashboard
-          </h1>
-          <p className="font-mono text-sm text-muted-foreground mt-4">
-            Track game registrations, query volume, and revenue distribution
-          </p>
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Page Header */}
+      <PageHeader
+        badge="Games"
+        title="Your Games"
+        description="Register, manage, and track earnings from your games on the PredictBNB oracle."
+      >
+        <div className="flex items-center gap-4">
+          <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
+            <DialogTrigger asChild>
+              <Button className="font-mono text-xs uppercase tracking-widest">
+                <Plus className="w-4 h-4 mr-2" />
+                <ScrambleTextOnHover text="Register Game" duration={0.4} />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-[var(--font-bebas)] text-2xl">Register New Game</DialogTitle>
+                <DialogDescription className="font-mono text-xs text-muted-foreground">
+                  Stake 0.1 BNB to register your game and start earning from queries.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block mb-2">
+                    Game Name
+                  </label>
+                  <Input
+                    placeholder="Enter game name"
+                    value={newGameName}
+                    onChange={(e) => setNewGameName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block mb-2">
+                    Metadata (JSON)
+                  </label>
+                  <Input
+                    placeholder='{"genre": "FPS", "website": "..."}'
+                    value={newGameMetadata}
+                    onChange={(e) => setNewGameMetadata(e.target.value)}
+                  />
+                </div>
+                <div className="p-3 border border-accent/30 bg-accent/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wallet className="w-4 h-4 text-accent" />
+                    <span className="font-mono text-xs text-accent">Required Stake</span>
+                  </div>
+                  <div className="font-[var(--font-bebas)] text-2xl text-accent">0.1 BNB</div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setRegisterOpen(false)}
+                  className="flex-1 font-mono text-xs uppercase tracking-widest"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRegisterGame}
+                  disabled={!newGameName || isRegistering || isConfirming}
+                  className="flex-1 font-mono text-xs uppercase tracking-widest"
+                >
+                  {isRegistering || isConfirming ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Zap className="w-4 h-4 mr-2" />
+                  )}
+                  {isRegistering ? "Confirming..." : isConfirming ? "Processing..." : "Register"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
+      </PageHeader>
 
-        {/* Time Range Selector */}
-        <div className="flex gap-2 mb-8">
-          {(["24h", "7d", "30d", "all"] as const).map((range) => (
-            <Button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              variant={timeRange === range ? "default" : "outline"}
-              className="font-mono text-xs uppercase tracking-widest"
-            >
-              <ScrambleTextOnHover text={range} duration={0.3} />
+      {/* Stats */}
+      <ScrollRevealStagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <ScrollRevealItem>
+          <StatCard
+            title="Total Games"
+            value={demoGames.length}
+            icon={Gamepad2}
+            variant="accent"
+          />
+        </ScrollRevealItem>
+        <ScrollRevealItem>
+          <StatCard
+            title="Total Queries"
+            value={totalQueries}
+            change={18.5}
+            changeLabel="this week"
+            icon={TrendingUp}
+          />
+        </ScrollRevealItem>
+        <ScrollRevealItem>
+          <StatCard
+            title="Total Revenue"
+            value={totalRevenue}
+            suffix=" BNB"
+            change={12.3}
+            changeLabel="vs last month"
+            icon={Wallet}
+            variant="success"
+          />
+        </ScrollRevealItem>
+        <ScrollRevealItem>
+          <StatCard
+            title="Avg Reputation"
+            value={(demoGames.reduce((sum, g) => sum + g.reputation, 0) / demoGames.length).toFixed(0)}
+            suffix="/1000"
+            icon={CheckCircle2}
+          />
+        </ScrollRevealItem>
+      </ScrollRevealStagger>
+
+      {/* Search & Filter */}
+      <ScrollReveal>
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search games..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button variant="outline" className="font-mono text-xs uppercase tracking-widest">
+            <Filter className="w-4 h-4 mr-2" />
+            Filter
+          </Button>
+        </div>
+      </ScrollReveal>
+
+      {/* Games List */}
+      <ScrollReveal>
+        <Card>
+          <SectionHeader title="Your Registered Games" badge="Active" />
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="all">All Games</TabsTrigger>
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="pending">Pending</TabsTrigger>
+            </TabsList>
+            <TabsContent value="all">
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {filteredGames.map((game, index) => (
+                    <motion.div
+                      key={game.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <Sheet>
+                        <SheetTrigger asChild>
+                          <div className="cursor-pointer">
+                            <motion.div
+                              whileHover={{ x: 4 }}
+                              className="p-4 border border-border/30 hover:border-accent/50 transition-all"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 border border-accent/30 flex items-center justify-center">
+                                    <Gamepad2 className="w-6 h-6 text-accent" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-mono text-sm text-foreground font-medium">{game.name}</h3>
+                                      <Badge variant="accent">{game.status}</Badge>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                      <span className="font-mono text-xs text-muted-foreground">{game.type}</span>
+                                      <span className="font-mono text-xs text-muted-foreground">Stake: {game.stake} BNB</span>
+                                      <span className="font-mono text-xs text-muted-foreground">Rep: {game.reputation}/1000</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-6">
+                                  <div className="text-right">
+                                    <div className="font-mono text-xs text-muted-foreground">Queries</div>
+                                    <div className="font-[var(--font-bebas)] text-xl text-foreground">{game.queries.toLocaleString()}</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-mono text-xs text-muted-foreground">Revenue</div>
+                                    <div className="font-[var(--font-bebas)] text-xl text-accent">{game.revenue} BNB</div>
+                                  </div>
+                                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                                </div>
+                              </div>
+                            </motion.div>
+                          </div>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
+                          <SheetHeader>
+                            <SheetTitle className="font-[var(--font-bebas)] text-2xl">{game.name}</SheetTitle>
+                            <SheetDescription className="font-mono text-xs">Game ID: {game.id}</SheetDescription>
+                          </SheetHeader>
+                          <div className="mt-6 space-y-6">
+                            {/* Game Stats */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <MiniStatCard title="Total Queries" value={game.queries.toLocaleString()} />
+                              <MiniStatCard title="Revenue" value={game.revenue} suffix=" BNB" />
+                              <MiniStatCard title="Matches" value={game.matches} />
+                              <MiniStatCard title="Disputes" value={game.disputes} />
+                            </div>
+
+                            {/* Reputation */}
+                            <div className="p-4 border border-border/30">
+                              <div className="font-mono text-xs text-muted-foreground mb-3">Reputation Score</div>
+                              <ProgressBar
+                                value={game.reputation}
+                                max={1000}
+                                showLabel
+                                label={`${game.reputation}/1000`}
+                              />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="space-y-3">
+                              <Button className="w-full font-mono text-xs uppercase tracking-widest">
+                                <Wallet className="w-4 h-4 mr-2" />
+                                Withdraw Earnings
+                              </Button>
+                              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Schedule Match
+                              </Button>
+                              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
+                                <TrendingUp className="w-4 h-4 mr-2" />
+                                Increase Stake
+                              </Button>
+                            </div>
+                          </div>
+                        </SheetContent>
+                      </Sheet>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </TabsContent>
+            <TabsContent value="active">
+              <div className="space-y-3">
+                {filteredGames.filter(g => g.status === "active").map((game, index) => (
+                  <GameListItem
+                    key={game.id}
+                    name={game.name}
+                    type={game.type}
+                    queries={game.queries}
+                    revenue={game.revenue}
+                    status={game.status}
+                  />
+                ))}
+              </div>
+            </TabsContent>
+            <TabsContent value="pending">
+              <EmptyState
+                icon={Clock}
+                title="No Pending Games"
+                description="All your games are currently active."
+              />
+            </TabsContent>
+          </Tabs>
+        </Card>
+      </ScrollReveal>
+
+      {/* Bottom Drawer for Mobile Actions */}
+      <div className="md:hidden fixed bottom-4 right-4">
+        <Drawer>
+          <DrawerTrigger asChild>
+            <Button size="icon" className="w-14 h-14 rounded-full shadow-lg">
+              <Plus className="w-6 h-6" />
             </Button>
-          ))}
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
-            <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">Total Games</div>
-            <div className="font-[var(--font-bebas)] text-4xl text-accent">{gameData.totalGames}</div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">+12 this month</div>
-          </Card>
-
-          <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
-            <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">Total Queries</div>
-            <div className="font-[var(--font-bebas)] text-4xl text-accent">
-              {(gameData.totalQueries / 1000000).toFixed(2)}M
+          </DrawerTrigger>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle className="font-[var(--font-bebas)] text-2xl">Quick Actions</DrawerTitle>
+              <DrawerDescription className="font-mono text-xs">Manage your games</DrawerDescription>
+            </DrawerHeader>
+            <div className="p-4 space-y-3">
+              <Button className="w-full font-mono text-xs uppercase tracking-widest">
+                <Plus className="w-4 h-4 mr-2" />
+                Register New Game
+              </Button>
+              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
+                <Wallet className="w-4 h-4 mr-2" />
+                Withdraw All Earnings
+              </Button>
             </div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">+18% vs last month</div>
-          </Card>
-
-          <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
-            <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">Total Revenue</div>
-            <div className="font-[var(--font-bebas)] text-4xl text-accent">
-              ${(gameData.totalRevenue / 1000000).toFixed(2)}M
-            </div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">Developer earnings (80%)</div>
-          </Card>
-
-          <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
-            <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">Avg Revenue</div>
-            <div className="font-[var(--font-bebas)] text-4xl text-accent">${gameData.averageRevenuePerGame}</div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">Per game per month</div>
-          </Card>
-        </div>
-
-        {/* Top Games Table */}
-        <div className="mb-12">
-          <h2 className="font-mono text-lg font-medium text-foreground mb-6">Top Performing Games</h2>
-          <div className="border border-border/30 overflow-hidden">
-            <div className="grid grid-cols-7 gap-px bg-border/30">
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Game Name</div>
-              </div>
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Type</div>
-              </div>
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Queries</div>
-              </div>
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Revenue</div>
-              </div>
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Dispute Rate</div>
-              </div>
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Status</div>
-              </div>
-              <div className="bg-background p-4">
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Action</div>
-              </div>
-            </div>
-
-            {topGames.map((game) => (
-              <div
-                key={game.id}
-                className="grid grid-cols-7 gap-px bg-border/30 hover:bg-accent/10 transition-colors duration-200"
-              >
-                <div className="bg-background p-4">
-                  <div className="font-mono text-sm text-foreground">{game.name}</div>
-                </div>
-                <div className="bg-background p-4">
-                  <div className="font-mono text-sm text-muted-foreground">{game.type}</div>
-                </div>
-                <div className="bg-background p-4">
-                  <div className="font-mono text-sm text-muted-foreground">{(game.queries / 1000).toFixed(0)}K</div>
-                </div>
-                <div className="bg-background p-4">
-                  <div className="font-mono text-sm text-accent font-medium">${(game.revenue / 1000).toFixed(0)}K</div>
-                </div>
-                <div className="bg-background p-4">
-                  <div className="font-mono text-sm text-muted-foreground">{game.disputeRate}%</div>
-                </div>
-                <div className="bg-background p-4">
-                  <div className="font-mono text-xs uppercase tracking-widest text-accent">{game.status}</div>
-                </div>
-                <div className="bg-background p-4">
-                  <button className="font-mono text-xs uppercase tracking-widest text-foreground hover:text-accent transition-colors duration-200">
-                    View
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div>
-          <h2 className="font-mono text-lg font-medium text-foreground mb-6">Recent Activity</h2>
-          <div className="space-y-3">
-            {recentActivity.map((activity, index) => (
-              <div
-                key={index}
-                className="border border-border/30 p-4 bg-card/30 backdrop-blur-sm hover:border-accent/50 transition-colors duration-200"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="font-mono text-sm text-foreground mb-1">{activity.game}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{activity.action}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-xs text-accent mb-1">{activity.matchId}</div>
-                    <div className="font-mono text-xs text-muted-foreground">{activity.time}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+            <DrawerFooter>
+              <Button variant="ghost" className="font-mono text-xs">
+                Cancel
+              </Button>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
       </div>
-    </main>
+    </div>
   )
 }
