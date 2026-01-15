@@ -1,23 +1,20 @@
 "use client"
 
-import { useReadContracts } from "wagmi"
 import { motion } from "framer-motion"
-import { formatEther } from "viem"
 import { PageHeader, Card, SectionHeader, CardGrid, Divider } from "@/components/dashboard/layout-components"
 import { StatCard, MiniStatCard } from "@/components/dashboard/stat-card"
 import { ScrollReveal, ScrollRevealStagger, ScrollRevealItem } from "@/components/animations/scroll-reveal"
 import { ProgressBar, CircularProgress } from "@/components/animations/progress-bar"
 import { FloatingOrb, PulsingDot, GradientBlob } from "@/components/animations/floating-elements"
-import { AnimatedCounter } from "@/components/animations/animated-counter"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrambleTextOnHover } from "@/components/scramble-text"
 import {
-  OracleCoreContract,
-  FeeManagerV2Contract,
-  GameRegistryContract,
-} from "@/lib/contracts"
+  useProtocolStats,
+  useContractsDeployed,
+} from "@/lib/hooks/useContractData"
+import { DEMO_DISPUTES, DEMO_DAILY_STATS } from "@/lib/data/demo-data"
 import {
   Activity,
   Zap,
@@ -38,72 +35,54 @@ import {
 } from "lucide-react"
 
 export default function ProtocolPage() {
-  // Fetch protocol stats
-  const { data: protocolStats } = useReadContracts({
-    contracts: [
-      { ...OracleCoreContract, functionName: "totalResults" },
-      { ...OracleCoreContract, functionName: "totalFinalized" },
-      { ...FeeManagerV2Contract, functionName: "totalQueries" },
-      { ...FeeManagerV2Contract, functionName: "totalRevenue" },
-      { ...FeeManagerV2Contract, functionName: "protocolBalance" },
-      { ...FeeManagerV2Contract, functionName: "disputerPoolBalance" },
-      { ...GameRegistryContract, functionName: "totalGames" },
-      { ...GameRegistryContract, functionName: "totalMatches" },
-      { ...FeeManagerV2Contract, functionName: "queryFee" },
-    ],
-  })
+  const deployed = useContractsDeployed()
+  
+  // Fetch protocol stats using custom hook
+  const { data: stats, isLoading } = useProtocolStats()
 
-  const totalResults = protocolStats?.[0]?.result ? Number(protocolStats[0].result) : 1247
-  const totalFinalized = protocolStats?.[1]?.result ? Number(protocolStats[1].result) : 1203
-  const totalQueries = protocolStats?.[2]?.result ? Number(protocolStats[2].result) : 45892
-  const totalRevenue = protocolStats?.[3]?.result 
-    ? parseFloat(formatEther(protocolStats[3].result as bigint)) 
-    : 156.78
-  const protocolBalance = protocolStats?.[4]?.result 
-    ? parseFloat(formatEther(protocolStats[4].result as bigint)) 
-    : 23.52
-  const disputerPool = protocolStats?.[5]?.result 
-    ? parseFloat(formatEther(protocolStats[5].result as bigint)) 
-    : 7.84
-  const totalGames = protocolStats?.[6]?.result ? Number(protocolStats[6].result) : 23
-  const totalMatches = protocolStats?.[7]?.result ? Number(protocolStats[7].result) : 4521
-  const queryFee = protocolStats?.[8]?.result 
-    ? parseFloat(formatEther(protocolStats[8].result as bigint)) 
-    : 0.00416
-
-  const finalizationRate = totalResults > 0 ? (totalFinalized / totalResults) * 100 : 96.5
-  const developerRevenue = totalRevenue * 0.8
-
-  // Demo data for charts
-  const weeklyData = [
-    { day: "Mon", queries: 4521, revenue: 18.8 },
-    { day: "Tue", queries: 5234, revenue: 21.8 },
-    { day: "Wed", queries: 6102, revenue: 25.4 },
-    { day: "Thu", queries: 5876, revenue: 24.5 },
-    { day: "Fri", queries: 7234, revenue: 30.1 },
-    { day: "Sat", queries: 8912, revenue: 37.1 },
-    { day: "Sun", queries: 8013, revenue: 33.4 },
-  ]
-
-  const recentDisputes = [
-    { id: "1", game: "CS2 Pro League", match: "0xabc...", status: "resolved", result: "rejected" },
-    { id: "2", game: "Virtual Football", match: "0xdef...", status: "pending", result: null },
-  ]
+  const developerRevenue = stats.totalRevenue * 0.8
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Page Header with Network Status */}
       <div className="relative">
         <GradientBlob className="-top-40 -right-40" />
+        
+        {/* Demo Mode Banner */}
+        {!stats.isLive && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 border border-yellow-500/30 bg-yellow-500/5 flex items-center gap-3"
+          >
+            <AlertTriangle className="w-5 h-5 text-yellow-400" />
+            <div className="flex-1">
+              <span className="font-mono text-xs text-yellow-400 uppercase tracking-widest">Demo Mode</span>
+              <p className="font-mono text-xs text-muted-foreground mt-1">
+                Contracts not deployed. Showing demonstration data.
+              </p>
+            </div>
+            <Badge variant="warning">Demo Data</Badge>
+          </motion.div>
+        )}
+
         <PageHeader
           badge="Protocol"
           title="Network Overview"
           description="Real-time statistics and health metrics for the PredictBNB oracle network."
         >
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 border border-green-500/30 bg-green-500/10">
+            <div className={`flex items-center gap-2 px-4 py-2 border ${
+              stats.isLive 
+                ? "border-green-500/30 bg-green-500/10" 
+                : "border-yellow-500/30 bg-yellow-500/10"
+            }`}>
               <PulsingDot />
-              <span className="font-mono text-xs text-green-400 uppercase tracking-widest">Network Healthy</span>
+              <span className={`font-mono text-xs uppercase tracking-widest ${
+                stats.isLive ? "text-green-400" : "text-yellow-400"
+              }`}>
+                {stats.isLive ? "Network Live" : "Demo Mode"}
+              </span>
             </div>
             <Badge variant="outline" className="font-mono text-xs">
               <Clock className="w-3 h-3 mr-1" />
@@ -118,7 +97,7 @@ export default function ProtocolPage() {
         <ScrollRevealItem>
           <StatCard
             title="Total Queries"
-            value={totalQueries}
+            value={stats.totalQueries}
             change={28.5}
             changeLabel="this week"
             icon={Activity}
@@ -128,7 +107,7 @@ export default function ProtocolPage() {
         <ScrollRevealItem>
           <StatCard
             title="Total Revenue"
-            value={totalRevenue}
+            value={stats.totalRevenue}
             suffix=" BNB"
             change={15.2}
             changeLabel="vs last month"
@@ -139,7 +118,7 @@ export default function ProtocolPage() {
         <ScrollRevealItem>
           <StatCard
             title="Registered Games"
-            value={totalGames}
+            value={stats.totalGames}
             change={3}
             changeLabel="new this week"
             icon={Database}
@@ -148,7 +127,7 @@ export default function ProtocolPage() {
         <ScrollRevealItem>
           <StatCard
             title="Total Matches"
-            value={totalMatches}
+            value={stats.totalMatches}
             change={12.8}
             changeLabel="this month"
             icon={BarChart3}
@@ -162,38 +141,40 @@ export default function ProtocolPage() {
           <FloatingOrb className="absolute -top-20 -right-20 bg-accent" size={200} delay={0} />
           <SectionHeader
             title="Oracle Performance"
-            badge="Live"
+            badge={stats.isLive ? "Live" : "Demo"}
             subtitle="Real-time metrics for result submission and finalization"
           />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             <div className="flex flex-col items-center text-center">
-              <CircularProgress value={finalizationRate} size={140} strokeWidth={8} />
+              <CircularProgress value={stats.finalizationRate} size={140} strokeWidth={8} />
               <div className="mt-4">
                 <div className="font-mono text-xs text-muted-foreground">Finalization Rate</div>
-                <div className="font-mono text-sm text-foreground mt-1">{totalFinalized.toLocaleString()} / {totalResults.toLocaleString()} results</div>
+                <div className="font-mono text-sm text-foreground mt-1">
+                  {stats.totalFinalized.toLocaleString()} / {stats.totalResults.toLocaleString()} results
+                </div>
               </div>
             </div>
             <div className="space-y-6">
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono text-xs text-muted-foreground">Results Submitted</span>
-                  <span className="font-mono text-sm text-accent">{totalResults.toLocaleString()}</span>
+                  <span className="font-mono text-sm text-accent">{stats.totalResults.toLocaleString()}</span>
                 </div>
                 <ProgressBar value={100} />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono text-xs text-muted-foreground">Results Finalized</span>
-                  <span className="font-mono text-sm text-accent">{totalFinalized.toLocaleString()}</span>
+                  <span className="font-mono text-sm text-accent">{stats.totalFinalized.toLocaleString()}</span>
                 </div>
-                <ProgressBar value={finalizationRate} />
+                <ProgressBar value={stats.finalizationRate} />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono text-xs text-muted-foreground">Dispute Rate</span>
-                  <span className="font-mono text-sm text-yellow-400">{(100 - finalizationRate).toFixed(2)}%</span>
+                  <span className="font-mono text-sm text-yellow-400">{stats.disputeRate.toFixed(2)}%</span>
                 </div>
-                <ProgressBar value={100 - finalizationRate} barClassName="bg-yellow-500" />
+                <ProgressBar value={stats.disputeRate} barClassName="bg-yellow-500" />
               </div>
             </div>
             <div className="space-y-4">
@@ -209,7 +190,7 @@ export default function ProtocolPage() {
                   <Shield className="w-4 h-4 text-accent" />
                   <span className="font-mono text-xs text-muted-foreground">Disputes This Month</span>
                 </div>
-                <div className="font-[var(--font-bebas)] text-3xl text-foreground">12</div>
+                <div className="font-[var(--font-bebas)] text-3xl text-foreground">{stats.totalDisputed}</div>
               </div>
             </div>
           </div>
@@ -239,7 +220,7 @@ export default function ProtocolPage() {
                   </div>
                   <ProgressBar value={80} />
                   <div className="font-mono text-xs text-muted-foreground mt-2">
-                    ~{(queryFee * 0.8 * 600).toFixed(2)} USD per query
+                    ~${(stats.queryFee * 600 * 0.8).toFixed(2)} USD per query
                   </div>
                 </div>
                 <div className="p-4 border border-border/30">
@@ -271,12 +252,12 @@ export default function ProtocolPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 border border-border/30">
                   <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Protocol Balance</div>
-                  <div className="font-[var(--font-bebas)] text-3xl text-foreground">{protocolBalance.toFixed(2)}</div>
+                  <div className="font-[var(--font-bebas)] text-3xl text-foreground">{stats.protocolBalance.toFixed(2)}</div>
                   <div className="font-mono text-xs text-muted-foreground">BNB</div>
                 </div>
                 <div className="p-4 border border-border/30">
                   <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Disputer Pool</div>
-                  <div className="font-[var(--font-bebas)] text-3xl text-foreground">{disputerPool.toFixed(2)}</div>
+                  <div className="font-[var(--font-bebas)] text-3xl text-foreground">{stats.disputerPoolBalance.toFixed(2)}</div>
                   <div className="font-mono text-xs text-muted-foreground">BNB</div>
                 </div>
                 <div className="p-4 border border-border/30">
@@ -286,7 +267,7 @@ export default function ProtocolPage() {
                 </div>
                 <div className="p-4 border border-border/30">
                   <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Query Fee</div>
-                  <div className="font-[var(--font-bebas)] text-3xl text-foreground">{queryFee.toFixed(5)}</div>
+                  <div className="font-[var(--font-bebas)] text-3xl text-foreground">{stats.queryFee.toFixed(5)}</div>
                   <div className="font-mono text-xs text-muted-foreground">BNB/query</div>
                 </div>
               </div>
@@ -301,34 +282,33 @@ export default function ProtocolPage() {
           <Card>
             <SectionHeader title="Network Health" badge="Status" />
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 border border-green-500/30 bg-green-500/5">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span className="font-mono text-sm text-foreground">Oracle Core</span>
+              {[
+                { name: "Oracle Core", deployed: deployed.oracleCore },
+                { name: "Game Registry", deployed: deployed.gameRegistry },
+                { name: "Fee Manager", deployed: deployed.feeManager },
+                { name: "Dispute Resolver", deployed: true }, // Assume deployed with others
+              ].map((contract) => (
+                <div 
+                  key={contract.name}
+                  className={`flex items-center justify-between p-3 border ${
+                    contract.deployed 
+                      ? "border-green-500/30 bg-green-500/5" 
+                      : "border-yellow-500/30 bg-yellow-500/5"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {contract.deployed ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                    )}
+                    <span className="font-mono text-sm text-foreground">{contract.name}</span>
+                  </div>
+                  <Badge variant={contract.deployed ? "success" : "warning"}>
+                    {contract.deployed ? "Operational" : "Not Deployed"}
+                  </Badge>
                 </div>
-                <Badge variant="success">Operational</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 border border-green-500/30 bg-green-500/5">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span className="font-mono text-sm text-foreground">Game Registry</span>
-                </div>
-                <Badge variant="success">Operational</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 border border-green-500/30 bg-green-500/5">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span className="font-mono text-sm text-foreground">Fee Manager</span>
-                </div>
-                <Badge variant="success">Operational</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 border border-green-500/30 bg-green-500/5">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span className="font-mono text-sm text-foreground">Dispute Resolver</span>
-                </div>
-                <Badge variant="success">Operational</Badge>
-              </div>
+              ))}
             </div>
           </Card>
         </ScrollReveal>
@@ -339,7 +319,7 @@ export default function ProtocolPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs text-muted-foreground">Total Value Locked (Stakes)</span>
-                <span className="font-mono text-sm text-accent">{(totalGames * 0.15).toFixed(2)} BNB</span>
+                <span className="font-mono text-sm text-accent">{(stats.totalGames * 0.15).toFixed(2)} BNB</span>
               </div>
               <Divider className="my-2" />
               <div className="flex items-center justify-between">
@@ -379,7 +359,7 @@ export default function ProtocolPage() {
             }
           />
           <div className="space-y-3">
-            {recentDisputes.map((dispute) => (
+            {DEMO_DISPUTES.map((dispute) => (
               <motion.div
                 key={dispute.id}
                 whileHover={{ x: 4 }}
@@ -397,11 +377,13 @@ export default function ProtocolPage() {
                         {dispute.status}
                       </Badge>
                     </div>
-                    <span className="font-mono text-xs text-muted-foreground">Match: {dispute.match}</span>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      Match: {dispute.matchId} • Stake: {dispute.stakeAmount} BNB
+                    </span>
                   </div>
-                  {dispute.result && (
-                    <Badge variant={dispute.result === "accepted" ? "success" : "destructive"}>
-                      {dispute.result}
+                  {dispute.status !== "pending" && (
+                    <Badge variant={dispute.status === "accepted" ? "success" : "destructive"}>
+                      {dispute.status}
                     </Badge>
                   )}
                 </div>
