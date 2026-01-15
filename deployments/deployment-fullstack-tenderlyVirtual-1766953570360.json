@@ -1,0 +1,53 @@
+{
+  "network": "tenderlyVirtual",
+  "chainId": "8",
+  "deployer": "0x8AaEe2071A400cC60927e46D53f751e521ef4D35",
+  "timestamp": "2025-12-28T20:26:10.358Z",
+  "version": "3.0.0",
+  "contracts": {
+    "core": {
+      "GameRegistry": "0x790a1703AB713b010018cbc6D27BA5211fb56B26",
+      "OracleCore": "0xA30c8dC715dDa9FF9088adA109FB74Fb97f75235",
+      "FeeManagerV2": "0x3BB6486fCbeCa9B2Ae85Edba3E5669AcC1971097",
+      "DisputeResolver": "0xdc23bC96C75034F0Cd1549c0B9781A723F93160B",
+      "PredictToken": "0x14c49956930aaeF3DC5ADFfcE6Dc751BfaFB08bC"
+    },
+    "games": {
+      "RockPaperScissors": "0x4d3f1C08D6f0E7979372CF643aBb98d0103a8a96",
+      "VirtualFootballGame": "0x6271498c4EAd88AbaCB3db20f3974AfaBfdC8eD6"
+    },
+    "markets": {
+      "RPSPredictionMarket": "0xba3Fa9195a5a4abcc1a7990048D9ed44E1AEc5F9",
+      "VirtualFootballMarket": "0x4865a14d7c18f8861fE8a7136e4d2197730DC6bb"
+    }
+  },
+  "gameIds": {
+    "RockPaperScissors": "0x2f7a00af876c269cf51c559da3dd27d2c7d26f7e23b649c530a3fa6087169ca7",
+    "VirtualFootballGame": "0x503c4c979ef40b90d4dd8f82024ff09c2892950c4425859fdd77fb0bc7a910f7"
+  },
+  "configuration": {
+    "minimumStake": "0.1 BNB",
+    "queryFee": "0.00416 BNB (~$2.00)",
+    "challengeStake": "0.2 BNB",
+    "disputeWindow": "15 minutes",
+    "freeTrialLimit": 5,
+    "developerPremiumMax": "30%",
+    "platformFee": "2-5% (varies by market)",
+    "revenueShare": "80% dev / 15% protocol / 5% disputers"
+  },
+  "features": [
+    "UUPS upgradeable core contracts",
+    "RPS 1v1 card game with verifiable randomness",
+    "Virtual Football automated league (10 teams, 20 matches/season)",
+    "Parimutuel prediction markets",
+    "Oracle-based result resolution",
+    "Free season voting (VF)",
+    "Tipster system (VF)",
+    "Referral program + streak rewards",
+    "PREDICT token airdrops"
+  ],
+  "incentivePools": {
+    "marketingBudget": "0.001 BNB",
+    "streakRewardPool": "0.0005 BNB"
+  }
+}
