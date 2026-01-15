@@ -1,12 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi"
+import { useAccount } from "wagmi"
 import { motion, AnimatePresence } from "framer-motion"
-import { formatEther, parseEther, type Address } from "viem"
 import { PageHeader, Card, SectionHeader, EmptyState, CardGrid } from "@/components/dashboard/layout-components"
 import { StatCard, MiniStatCard } from "@/components/dashboard/stat-card"
-import { GameListItem, DataTable } from "@/components/dashboard/data-table"
 import { ScrollReveal, ScrollRevealStagger, ScrollRevealItem } from "@/components/animations/scroll-reveal"
 import { ProgressBar } from "@/components/animations/progress-bar"
 import { Button } from "@/components/ui/button"
@@ -40,109 +38,63 @@ import {
   DrawerFooter,
 } from "@/components/ui/drawer"
 import {
-  GameRegistryContract,
-  FeeManagerV2Contract,
-  type GameData,
-  type DeveloperEarnings,
-} from "@/lib/contracts"
+  useDeveloperGames,
+  useRegisterGame,
+  useWithdrawEarnings,
+  useContractsDeployed,
+  type Game,
+} from "@/lib/hooks/useContractData"
 import {
   Gamepad2,
   Plus,
   Search,
   Filter,
-  MoreVertical,
-  Eye,
-  Edit,
-  Trash2,
-  ExternalLink,
   Wallet,
   TrendingUp,
   Clock,
   CheckCircle2,
-  AlertCircle,
   ChevronRight,
   Zap,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react"
 
 export default function GamesPage() {
   const { address, isConnected } = useAccount()
+  const deployed = useContractsDeployed()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedGame, setSelectedGame] = useState<string | null>(null)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [newGameName, setNewGameName] = useState("")
   const [newGameMetadata, setNewGameMetadata] = useState("")
 
-  // Fetch developer's games
-  const { data: gameIds, refetch: refetchGames } = useReadContract({
-    ...GameRegistryContract,
-    functionName: "getDeveloperGames",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  })
+  // Fetch developer's games using custom hook
+  const { data: games, isLoading, refetch } = useDeveloperGames(address)
 
-  // Register game
-  const { writeContract, isPending: isRegistering, data: registerHash } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash: registerHash,
-  })
+  // Register game hook
+  const { 
+    registerGame, 
+    isPending: isRegistering, 
+    isConfirming, 
+    isSuccess: registerSuccess 
+  } = useRegisterGame()
+
+  // Withdraw earnings hook
+  const { withdraw, isPending: isWithdrawing } = useWithdrawEarnings()
 
   const handleRegisterGame = () => {
     if (!newGameName) return
-    writeContract({
-      ...GameRegistryContract,
-      functionName: "registerGame",
-      args: [newGameName, newGameMetadata || "{}"],
-      value: parseEther("0.1"),
-    })
+    registerGame(newGameName, newGameMetadata || "{}")
   }
 
-  // Demo games data (would be replaced with real contract data)
-  const demoGames = [
-    {
-      id: "0x123",
-      name: "Virtual Football League",
-      type: "Sports",
-      stake: "0.15",
-      queries: 12450,
-      revenue: "2.45",
-      reputation: 850,
-      status: "active" as const,
-      matches: 156,
-      disputes: 2,
-    },
-    {
-      id: "0x456",
-      name: "RPS Championship",
-      type: "Casual",
-      stake: "0.1",
-      queries: 8932,
-      revenue: "1.78",
-      reputation: 920,
-      status: "active" as const,
-      matches: 2341,
-      disputes: 0,
-    },
-    {
-      id: "0x789",
-      name: "CS2 Pro League",
-      type: "Esports",
-      stake: "0.5",
-      queries: 6721,
-      revenue: "1.34",
-      reputation: 780,
-      status: "active" as const,
-      matches: 89,
-      disputes: 5,
-    },
-  ]
-
-  const filteredGames = demoGames.filter((game) =>
+  const filteredGames = games.filter((game) =>
     game.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const totalRevenue = demoGames.reduce((sum, g) => sum + parseFloat(g.revenue), 0)
-  const totalQueries = demoGames.reduce((sum, g) => sum + g.queries, 0)
+  const totalRevenue = games.reduce((sum, g) => sum + parseFloat(g.revenue), 0)
+  const totalQueries = games.reduce((sum, g) => sum + g.queries, 0)
+  const avgReputation = games.length > 0 
+    ? Math.round(games.reduce((sum, g) => sum + g.reputation, 0) / games.length)
+    : 0
 
   if (!isConnected) {
     return (
@@ -169,6 +121,23 @@ export default function GamesPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
+      {/* Demo Mode Banner */}
+      {!games[0]?.isLive && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 border border-yellow-500/30 bg-yellow-500/5 flex items-center gap-3"
+        >
+          <AlertTriangle className="w-5 h-5 text-yellow-400" />
+          <div className="flex-1">
+            <span className="font-mono text-xs text-yellow-400 uppercase tracking-widest">Demo Mode</span>
+            <p className="font-mono text-xs text-muted-foreground mt-1">
+              Showing demonstration data. Deploy contracts to interact with real blockchain.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       {/* Page Header */}
       <PageHeader
         badge="Games"
@@ -218,6 +187,13 @@ export default function GamesPage() {
                   </div>
                   <div className="font-[var(--font-bebas)] text-2xl text-accent">0.1 BNB</div>
                 </div>
+                {!deployed.gameRegistry && (
+                  <div className="p-3 border border-yellow-500/30 bg-yellow-500/5">
+                    <span className="font-mono text-xs text-yellow-400">
+                      Contracts not deployed - this action will fail
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button
@@ -229,7 +205,7 @@ export default function GamesPage() {
                 </Button>
                 <Button
                   onClick={handleRegisterGame}
-                  disabled={!newGameName || isRegistering || isConfirming}
+                  disabled={!newGameName || isRegistering || isConfirming || !deployed.gameRegistry}
                   className="flex-1 font-mono text-xs uppercase tracking-widest"
                 >
                   {isRegistering || isConfirming ? (
@@ -250,7 +226,7 @@ export default function GamesPage() {
         <ScrollRevealItem>
           <StatCard
             title="Total Games"
-            value={demoGames.length}
+            value={games.length}
             icon={Gamepad2}
             variant="accent"
           />
@@ -278,7 +254,7 @@ export default function GamesPage() {
         <ScrollRevealItem>
           <StatCard
             title="Avg Reputation"
-            value={(demoGames.reduce((sum, g) => sum + g.reputation, 0) / demoGames.length).toFixed(0)}
+            value={avgReputation}
             suffix="/1000"
             icon={CheckCircle2}
           />
@@ -301,6 +277,14 @@ export default function GamesPage() {
             <Filter className="w-4 h-4 mr-2" />
             Filter
           </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => refetch()}
+            className="font-mono text-xs uppercase tracking-widest"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
         </div>
       </ScrollReveal>
 
@@ -318,96 +302,13 @@ export default function GamesPage() {
               <div className="space-y-3">
                 <AnimatePresence>
                   {filteredGames.map((game, index) => (
-                    <motion.div
-                      key={game.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <Sheet>
-                        <SheetTrigger asChild>
-                          <div className="cursor-pointer">
-                            <motion.div
-                              whileHover={{ x: 4 }}
-                              className="p-4 border border-border/30 hover:border-accent/50 transition-all"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 border border-accent/30 flex items-center justify-center">
-                                    <Gamepad2 className="w-6 h-6 text-accent" />
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h3 className="font-mono text-sm text-foreground font-medium">{game.name}</h3>
-                                      <Badge variant="accent">{game.status}</Badge>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                      <span className="font-mono text-xs text-muted-foreground">{game.type}</span>
-                                      <span className="font-mono text-xs text-muted-foreground">Stake: {game.stake} BNB</span>
-                                      <span className="font-mono text-xs text-muted-foreground">Rep: {game.reputation}/1000</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-6">
-                                  <div className="text-right">
-                                    <div className="font-mono text-xs text-muted-foreground">Queries</div>
-                                    <div className="font-[var(--font-bebas)] text-xl text-foreground">{game.queries.toLocaleString()}</div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-mono text-xs text-muted-foreground">Revenue</div>
-                                    <div className="font-[var(--font-bebas)] text-xl text-accent">{game.revenue} BNB</div>
-                                  </div>
-                                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                                </div>
-                              </div>
-                            </motion.div>
-                          </div>
-                        </SheetTrigger>
-                        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
-                          <SheetHeader>
-                            <SheetTitle className="font-[var(--font-bebas)] text-2xl">{game.name}</SheetTitle>
-                            <SheetDescription className="font-mono text-xs">Game ID: {game.id}</SheetDescription>
-                          </SheetHeader>
-                          <div className="mt-6 space-y-6">
-                            {/* Game Stats */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <MiniStatCard title="Total Queries" value={game.queries.toLocaleString()} />
-                              <MiniStatCard title="Revenue" value={game.revenue} suffix=" BNB" />
-                              <MiniStatCard title="Matches" value={game.matches} />
-                              <MiniStatCard title="Disputes" value={game.disputes} />
-                            </div>
-
-                            {/* Reputation */}
-                            <div className="p-4 border border-border/30">
-                              <div className="font-mono text-xs text-muted-foreground mb-3">Reputation Score</div>
-                              <ProgressBar
-                                value={game.reputation}
-                                max={1000}
-                                showLabel
-                                label={`${game.reputation}/1000`}
-                              />
-                            </div>
-
-                            {/* Actions */}
-                            <div className="space-y-3">
-                              <Button className="w-full font-mono text-xs uppercase tracking-widest">
-                                <Wallet className="w-4 h-4 mr-2" />
-                                Withdraw Earnings
-                              </Button>
-                              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
-                                <Plus className="w-4 h-4 mr-2" />
-                                Schedule Match
-                              </Button>
-                              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
-                                <TrendingUp className="w-4 h-4 mr-2" />
-                                Increase Stake
-                              </Button>
-                            </div>
-                          </div>
-                        </SheetContent>
-                      </Sheet>
-                    </motion.div>
+                    <GameCard 
+                      key={game.id} 
+                      game={game} 
+                      index={index} 
+                      onWithdraw={() => withdraw(game.id)}
+                      isWithdrawing={isWithdrawing}
+                    />
                   ))}
                 </AnimatePresence>
               </div>
@@ -415,13 +316,12 @@ export default function GamesPage() {
             <TabsContent value="active">
               <div className="space-y-3">
                 {filteredGames.filter(g => g.status === "active").map((game, index) => (
-                  <GameListItem
-                    key={game.id}
-                    name={game.name}
-                    type={game.type}
-                    queries={game.queries}
-                    revenue={game.revenue}
-                    status={game.status}
+                  <GameCard 
+                    key={game.id} 
+                    game={game} 
+                    index={index}
+                    onWithdraw={() => withdraw(game.id)}
+                    isWithdrawing={isWithdrawing}
                   />
                 ))}
               </div>
@@ -451,7 +351,10 @@ export default function GamesPage() {
               <DrawerDescription className="font-mono text-xs">Manage your games</DrawerDescription>
             </DrawerHeader>
             <div className="p-4 space-y-3">
-              <Button className="w-full font-mono text-xs uppercase tracking-widest">
+              <Button 
+                className="w-full font-mono text-xs uppercase tracking-widest"
+                onClick={() => setRegisterOpen(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Register New Game
               </Button>
@@ -469,5 +372,119 @@ export default function GamesPage() {
         </Drawer>
       </div>
     </div>
+  )
+}
+
+// Game Card Component
+function GameCard({ 
+  game, 
+  index, 
+  onWithdraw,
+  isWithdrawing 
+}: { 
+  game: Game
+  index: number
+  onWithdraw: () => void
+  isWithdrawing: boolean
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ delay: index * 0.05 }}
+    >
+      <Sheet>
+        <SheetTrigger asChild>
+          <div className="cursor-pointer">
+            <motion.div
+              whileHover={{ x: 4 }}
+              className="p-4 border border-border/30 hover:border-accent/50 transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 border border-accent/30 flex items-center justify-center">
+                    <Gamepad2 className="w-6 h-6 text-accent" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-mono text-sm text-foreground font-medium">{game.name}</h3>
+                      <Badge variant="accent">{game.status}</Badge>
+                      {!game.isLive && <Badge variant="warning">Demo</Badge>}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-mono text-xs text-muted-foreground">{game.type}</span>
+                      <span className="font-mono text-xs text-muted-foreground">Stake: {game.stake} BNB</span>
+                      <span className="font-mono text-xs text-muted-foreground">Rep: {game.reputation}/1000</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <div className="font-mono text-xs text-muted-foreground">Queries</div>
+                    <div className="font-[var(--font-bebas)] text-xl text-foreground">{game.queries.toLocaleString()}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-xs text-muted-foreground">Revenue</div>
+                    <div className="font-[var(--font-bebas)] text-xl text-accent">{game.revenue} BNB</div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </SheetTrigger>
+        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
+          <SheetHeader>
+            <SheetTitle className="font-[var(--font-bebas)] text-2xl">{game.name}</SheetTitle>
+            <SheetDescription className="font-mono text-xs">Game ID: {game.id.slice(0, 10)}...</SheetDescription>
+          </SheetHeader>
+          <div className="mt-6 space-y-6">
+            {/* Game Stats */}
+            <div className="grid grid-cols-2 gap-4">
+              <MiniStatCard title="Total Queries" value={game.queries.toLocaleString()} />
+              <MiniStatCard title="Revenue" value={game.revenue} suffix=" BNB" />
+              <MiniStatCard title="Matches" value={game.matches} />
+              <MiniStatCard title="Disputes" value={game.disputes} />
+            </div>
+
+            {/* Reputation */}
+            <div className="p-4 border border-border/30">
+              <div className="font-mono text-xs text-muted-foreground mb-3">Reputation Score</div>
+              <ProgressBar
+                value={game.reputation}
+                max={1000}
+                showLabel
+                label={`${game.reputation}/1000`}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3">
+              <Button 
+                className="w-full font-mono text-xs uppercase tracking-widest"
+                onClick={onWithdraw}
+                disabled={isWithdrawing || !game.isLive}
+              >
+                {isWithdrawing ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Wallet className="w-4 h-4 mr-2" />
+                )}
+                Withdraw Earnings
+              </Button>
+              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
+                <Plus className="w-4 h-4 mr-2" />
+                Schedule Match
+              </Button>
+              <Button variant="outline" className="w-full font-mono text-xs uppercase tracking-widest">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Increase Stake
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </motion.div>
   )
 }
