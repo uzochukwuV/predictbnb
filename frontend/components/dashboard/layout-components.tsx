@@ -106,8 +106,11 @@ export function Card({
   children,
   className,
   hover = true,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement> & { hover?: boolean }) {
+}: {
+  children: React.ReactNode
+  className?: string
+  hover?: boolean
+}) {
   return (
     <motion.div
       whileHover={hover ? { y: -2 } : {}}
@@ -117,7 +120,6 @@ export function Card({
         hover && "hover:border-accent/30",
         className
       )}
-      {...props}
     >
       {children}
     </motion.div>
