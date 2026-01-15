@@ -19,3 +19,7 @@ artifacts
 # Build files
 dist
 build
+-e 
+# Environment files
+*.env
+*.env.*
