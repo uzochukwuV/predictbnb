@@ -48,15 +48,9 @@ export function HeroSection() {
       </div>
 
       <div className="absolute top-8 right-8 md:top-12 md:right-12 flex items-center gap-4 z-20">
+        
         <Link
-          href="/game/rps"
-          className="group inline-flex items-center gap-2 border border-foreground/20 px-4 py-2 font-mono text-xs uppercase tracking-widest text-foreground hover:border-accent hover:text-accent transition-all duration-200"
-        >
-          <ScrambleTextOnHover text="Play Game" as="span" duration={0.5} />
-          <BitmapChevron className="w-3 h-3 transition-transform duration-[400ms] ease-in-out group-hover:rotate-45" />
-        </Link>
-        <Link
-          href="/prediction-market"
+          href="/dashboard"
           className="group inline-flex items-center gap-2 border border-accent bg-accent/10 px-4 py-2 font-mono text-xs uppercase tracking-widest text-accent hover:bg-accent hover:text-background transition-all duration-200"
         >
           <ScrambleTextOnHover text="Bet Now" as="span" duration={0.5} />
