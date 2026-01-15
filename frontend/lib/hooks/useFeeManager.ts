@@ -31,13 +31,13 @@ export function useQueryFee() {
  */
 export function useFormattedDeveloperEarnings(gameId: `0x${string}` | undefined) {
   const { data, isLoading, error } = useDeveloperEarnings(gameId)
-
-  const formatted = data
+  const dataany = data as any
+  const formatted = (dataany as any)
     ? {
-        totalEarned: formatEther(data[0]),
-        pendingEarnings: formatEther(data[1]),
-        lastWithdrawTime: Number(data[2]),
-        totalQueries: Number(data[3]),
+        totalEarned: formatEther(dataany[0]),
+        pendingEarnings: formatEther(dataany[1]),
+        lastWithdrawTime: Number(dataany[2]),
+        totalQueries: Number(dataany[3]),
       }
     : null
 

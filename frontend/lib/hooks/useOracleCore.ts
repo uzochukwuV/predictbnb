@@ -130,27 +130,27 @@ export function useGameOracleData(gameId: `0x${string}` | undefined) {
   const { data: stats, isLoading: isLoadingStats } = useGameStats(gameId)
   const { data: results, isLoading: isLoadingResults } = useGameResults(gameId)
   const { data: pending, isLoading: isLoadingPending } = usePendingResults(gameId, 10)
-
+  const statsany = stats as any
   // Calculate finalization rate
   const finalizationRate = stats
-    ? Number(stats[1]) > 0
-      ? (Number(stats[1]) / Number(stats[0])) * 100
+    ? Number(statsany[1]) > 0
+      ? (Number(statsany[1]) / Number(statsany[0])) * 100
       : 0
     : 0
 
   // Calculate dispute rate
   const disputeRate = stats
-    ? Number(stats[0]) > 0
-      ? (Number(stats[2]) / Number(stats[0])) * 100
+    ? Number(statsany[0]) > 0
+      ? (Number(statsany[2]) / Number(statsany[0])) * 100
       : 0
     : 0
 
   return {
-    stats: stats
+    stats: statsany
       ? {
-          totalResults: Number(stats[0]),
-          finalizedResults: Number(stats[1]),
-          disputedResults: Number(stats[2]),
+          totalResults: Number(statsany[0]),
+          finalizedResults: Number(statsany[1]),
+          disputedResults: Number(statsany[2]),
           finalizationRate,
           disputeRate,
         }
