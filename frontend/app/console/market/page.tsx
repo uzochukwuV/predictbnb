@@ -99,7 +99,7 @@ export default function MarketConsumerDashboard() {
   const longestStreak = streakData?.longestStreak || 0
   const referralCount = referralData?.referralCount || 0
   const referralEarnings = referralData
-    ? parseFloat(formatEther(referralData.earningsFromRefs))
+    ? parseFloat(formatEther(referralData.earningsFromRefs || BigInt(0)))
     : 0
   const freeTrialUsed = freeTrialQueries ? Number(freeTrialQueries) : 0
   const freeTrialLeft = Math.max(0, 5 - freeTrialUsed)

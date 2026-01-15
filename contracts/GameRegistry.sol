@@ -26,7 +26,8 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
     // ============ Structs ============
 
     struct Game {
-        address developer;
+        address developer; // The actual developer/owner
+        address gameContract; // The game contract address (if applicable)
         string name;
         string metadata; // JSON metadata (genre, website, etc.)
         uint256 stakedAmount;
@@ -72,6 +73,15 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
     /// @notice Mapping to check if a developer has registered a game
     mapping(address => bytes32[]) public developerGames;
+
+    /// @notice Mapping of gameId to array of matchIds for that game
+    mapping(bytes32 => bytes32[]) public gameMatches;
+
+    /// @notice Mapping to quickly check match count per game
+    mapping(bytes32 => uint256) public gameMatchCount;
+
+    /// @notice Array of all registered game IDs (for pagination)
+    bytes32[] public allGameIds;
 
     // ============ Events ============
 
@@ -119,10 +129,18 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
     event ResultSubmitted(bytes32 indexed matchId, bytes32 indexed gameId);
 
+    event DeveloperTransferred(
+        bytes32 indexed gameId,
+        address indexed oldDeveloper,
+        address indexed newDeveloper
+    );
+
     // ============ Modifiers ============
 
     modifier onlyGameDeveloper(bytes32 gameId) {
-        if (games[gameId].developer != msg.sender) revert Unauthorized();
+        Game storage game = games[gameId];
+        // Allow both developer and game contract to manage the game
+        if (game.developer != msg.sender && game.gameContract != msg.sender) revert Unauthorized();
         _;
     }
 
@@ -158,21 +176,31 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
      * @notice Register a new game on the oracle
      * @param name The name of the game
      * @param metadata JSON string with game metadata
+     * @param developer The developer address (pass address(0) to use msg.sender)
      * @return gameId The unique identifier for the registered game
      */
     function registerGame(
         string calldata name,
-        string calldata metadata
+        string calldata metadata,
+        address developer,
+        address gameAddress
     ) external payable nonReentrant returns (bytes32) {
         if (msg.value < minimumStake) revert InsufficientStake();
 
-        // Generate unique gameId from developer address and name
+        // If developer is address(0), use msg.sender as developer
+        address gameDeveloper = developer == address(0) ? msg.sender : developer;
+
+        // Game contract is msg.sender if different from developer
+        address gameContract = gameAddress != gameDeveloper ? msg.sender : address(0);
+
+        // Generate unique gameId from contract address, name, and timestamp
         bytes32 gameId = keccak256(abi.encodePacked(msg.sender, name, block.timestamp));
 
         if (games[gameId].developer != address(0)) revert GameAlreadyRegistered();
 
         games[gameId] = Game({
-            developer: msg.sender,
+            developer: gameDeveloper,
+            gameContract: gameContract,
             name: name,
             metadata: metadata,
             stakedAmount: msg.value,
@@ -184,10 +212,16 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
             isBanned: false
         });
 
-        developerGames[msg.sender].push(gameId);
+        // Index by both developer and game contract (if different)
+        developerGames[gameDeveloper].push(gameId);
+        if (gameContract != address(0)) {
+            developerGames[gameContract].push(gameId);
+        }
+
+        allGameIds.push(gameId);
         totalGames++;
 
-        emit GameRegistered(gameId, msg.sender, name, msg.value, uint64(block.timestamp));
+        emit GameRegistered(gameId, gameDeveloper, name, msg.value, uint64(block.timestamp));
 
         return gameId;
     }
@@ -224,6 +258,10 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
 
         games[gameId].totalMatches++;
         totalMatches++;
+
+        // Track match for this game
+        gameMatches[gameId].push(matchId);
+        gameMatchCount[gameId]++;
 
         emit MatchScheduled(matchId, gameId, msg.sender, scheduledTime, metadata);
 
@@ -359,6 +397,43 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
         oracleCore = _oracleCore;
     }
 
+    /**
+     * @notice Transfer a game to a new developer
+     * @dev Only owner can call this - useful for fixing registration bugs
+     * @param gameId The game identifier
+     * @param newDeveloper The new developer address
+     */
+    function transferGameDeveloper(
+        bytes32 gameId,
+        address newDeveloper
+    ) external onlyOwner gameExists(gameId) {
+        require(newDeveloper != address(0), "Invalid developer address");
+
+        Game storage game = games[gameId];
+        address oldDeveloper = game.developer;
+
+        require(oldDeveloper != newDeveloper, "Already the developer");
+
+        // Remove from old developer's game list
+        bytes32[] storage oldDevGames = developerGames[oldDeveloper];
+        for (uint256 i = 0; i < oldDevGames.length; i++) {
+            if (oldDevGames[i] == gameId) {
+                // Replace with last element and pop
+                oldDevGames[i] = oldDevGames[oldDevGames.length - 1];
+                oldDevGames.pop();
+                break;
+            }
+        }
+
+        // Update game's developer
+        game.developer = newDeveloper;
+
+        // Add to new developer's game list
+        developerGames[newDeveloper].push(gameId);
+
+        emit DeveloperTransferred(gameId, oldDeveloper, newDeveloper);
+    }
+
     // ============ View Functions ============
 
     /**
@@ -395,6 +470,181 @@ contract GameRegistry is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpg
                !game.isBanned &&
                game.stakedAmount >= minimumStake &&
                game.reputation >= 300; // Minimum acceptable reputation
+    }
+
+    /**
+     * @notice Get all matches for a specific game
+     * @param gameId The game identifier
+     * @return Array of matchIds for this game
+     */
+    function getGameMatches(bytes32 gameId) external view returns (bytes32[] memory) {
+        return gameMatches[gameId];
+    }
+
+    /**
+     * @notice Get paginated matches for a game
+     * @param gameId The game identifier
+     * @param offset Starting index
+     * @param limit Maximum number of matches to return
+     * @return Array of matchIds (paginated)
+     */
+    function getGameMatchesPaginated(
+        bytes32 gameId,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (bytes32[] memory) {
+        bytes32[] storage allMatches = gameMatches[gameId];
+
+        if (offset >= allMatches.length) {
+            return new bytes32[](0);
+        }
+
+        uint256 end = offset + limit;
+        if (end > allMatches.length) {
+            end = allMatches.length;
+        }
+
+        bytes32[] memory result = new bytes32[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            result[i - offset] = allMatches[i];
+        }
+
+        return result;
+    }
+
+    /**
+     * @notice Get match details for a specific game and matchId
+     * @param gameId The game identifier (for context validation)
+     * @param matchId The match identifier
+     * @return Match details
+     */
+    function getGameMatch(bytes32 gameId, bytes32 matchId) external view returns (Match memory) {
+        Match memory matchData = matches[matchId];
+        require(matchData.gameId == gameId, "Match not from this game");
+        return matchData;
+    }
+
+    /**
+     * @notice Batch get match details
+     * @param matchIds Array of match identifiers
+     * @return Array of Match structs
+     */
+    function getMatchesBatch(bytes32[] calldata matchIds) external view returns (Match[] memory) {
+        Match[] memory result = new Match[](matchIds.length);
+        for (uint256 i = 0; i < matchIds.length; i++) {
+            result[i] = matches[matchIds[i]];
+        }
+        return result;
+    }
+
+    /**
+     * @notice Batch get game details
+     * @param gameIds Array of game identifiers
+     * @return Array of Game structs
+     */
+    function getGamesBatch(bytes32[] calldata gameIds) external view returns (Game[] memory) {
+        Game[] memory result = new Game[](gameIds.length);
+        for (uint256 i = 0; i < gameIds.length; i++) {
+            result[i] = games[gameIds[i]];
+        }
+        return result;
+    }
+
+    /**
+     * @notice Get developer aggregated statistics
+     * @param developer The developer address
+     * @return _totalGames Number of games registered
+     * @return _totalMatches Total matches across all games
+     * @return _totalDisputes Total disputes across all games
+     * @return averageReputation Average reputation score
+     */
+    function getDeveloperStats(address developer)
+        external
+        view
+        returns (
+            uint256 _totalGames,
+            uint256 _totalMatches,
+            uint256 _totalDisputes,
+            uint256 averageReputation
+        )
+    {
+        bytes32[] memory devGames = developerGames[developer];
+        _totalGames = devGames.length;
+
+        if (_totalGames == 0) {
+            return (0, 0, 0, 0);
+        }
+
+        uint256 sumReputation = 0;
+        for (uint256 i = 0; i < devGames.length; i++) {
+            Game memory game = games[devGames[i]];
+            _totalMatches += game.totalMatches;
+            _totalDisputes += game.totalDisputes;
+            sumReputation += game.reputation;
+        }
+
+        averageReputation = sumReputation / _totalGames;
+    }
+
+    /**
+     * @notice Get paginated list of all games
+     * @param offset Starting index
+     * @param limit Maximum number of games to return
+     * @return Array of Game structs
+     */
+    function getAllGames(uint256 offset, uint256 limit) external view returns (Game[] memory) {
+        if (offset >= allGameIds.length) {
+            return new Game[](0);
+        }
+
+        uint256 end = offset + limit;
+        if (end > allGameIds.length) {
+            end = allGameIds.length;
+        }
+
+        Game[] memory result = new Game[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            result[i - offset] = games[allGameIds[i]];
+        }
+
+        return result;
+    }
+
+    /**
+     * @notice Get all active games
+     * @return Array of active game IDs
+     */
+    function getActiveGames() external view returns (bytes32[] memory) {
+        // Count active games first
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < allGameIds.length; i++) {
+            if (games[allGameIds[i]].isActive && !games[allGameIds[i]].isBanned) {
+                activeCount++;
+            }
+        }
+
+        // Build result array
+        bytes32[] memory result = new bytes32[](activeCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < allGameIds.length; i++) {
+            if (games[allGameIds[i]].isActive && !games[allGameIds[i]].isBanned) {
+                result[index] = allGameIds[i];
+                index++;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * @notice Check if a match exists and belongs to a specific game
+     * @param gameId The game identifier
+     * @param matchId The match identifier
+     * @return exists Whether the match exists for this game
+     */
+    function matchExists(bytes32 gameId, bytes32 matchId) external view returns (bool) {
+        Match memory matchData = matches[matchId];
+        return matchData.submitter != address(0) && matchData.gameId == gameId;
     }
 
     // ============ Internal Functions ============

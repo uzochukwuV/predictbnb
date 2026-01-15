@@ -67,6 +67,35 @@ export function useMatchCounter() {
   })
 }
 
+export function useGetPlayerMatches(playerAddress: Address | undefined) {
+  return useReadContract({
+    address: RPS_CONTRACT_ADDRESS,
+    abi: RockPaperScissorsABI.abi,
+    functionName: 'getPlayerMatches',
+    args: playerAddress ? [playerAddress] : undefined,
+    query: {
+      enabled: !!playerAddress,
+    },
+  })
+}
+
+export function useGetRecentMatches(limit: number = 10) {
+  return useReadContract({
+    address: RPS_CONTRACT_ADDRESS,
+    abi: RockPaperScissorsABI.abi,
+    functionName: 'getRecentMatches',
+    args: [BigInt(limit)],
+  })
+}
+
+export function useGetAllMatches() {
+  return useReadContract({
+    address: RPS_CONTRACT_ADDRESS,
+    abi: RockPaperScissorsABI.abi,
+    functionName: 'getAllMatches',
+  })
+}
+
 // Write hooks
 export function useCommitToMatch() {
   const { data: hash, writeContract, isPending, error } = useWriteContract()

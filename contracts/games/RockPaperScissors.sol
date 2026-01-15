@@ -49,6 +49,12 @@ contract RockPaperScissors {
     mapping(address => uint256) public playerWins;
     mapping(address => uint256) public playerMatches;
 
+    /// @notice Array of all match IDs
+    bytes32[] public allMatchIds;
+
+    /// @notice Mapping of player address to their match IDs
+    mapping(address => bytes32[]) public playerMatchIds;
+
     // ============ Events ============
 
     event MatchScheduled(
@@ -112,9 +118,12 @@ contract RockPaperScissors {
     function registerWithOracle() external payable onlyOwner {
         if (gameId != bytes32(0)) revert();
 
+        // Register with owner as developer, this contract as game contract
         gameId = gameRegistry.registerGame{value: msg.value}(
             "Rock Paper Scissors",
-            '{"type": "card-game", "players": 2, "rounds": 3, "randomness": "on-chain", "version": "1.0"}'
+            '{"type": "card-game", "players": 2, "rounds": 3, "randomness": "on-chain", "version": "1.0"}',
+            msg.sender, // Pass owner as the developer
+            address(this) // This contract as game contract
         );
     }
 
@@ -129,8 +138,11 @@ contract RockPaperScissors {
         address player1,
         address player2,
         uint64 scheduledTime
-    ) external onlyOwner returns (bytes32) {
+    ) external returns (bytes32) {
         if (gameId == bytes32(0)) revert NotRegistered();
+
+        // Caller must be one of the players
+        if (msg.sender != player1 && msg.sender != player2) revert NotPlayer();
 
         bytes32 matchId = gameRegistry.scheduleMatch(
             gameId,
@@ -159,6 +171,11 @@ contract RockPaperScissors {
         });
 
         matchCounter++;
+
+        // Track match IDs
+        allMatchIds.push(matchId);
+        playerMatchIds[player1].push(matchId);
+        playerMatchIds[player2].push(matchId);
 
         emit MatchScheduled(matchId, player1, player2, scheduledTime);
 
@@ -241,6 +258,91 @@ contract RockPaperScissors {
     function withdrawEarnings() external onlyOwner {
         // Developer earnings are tracked in FeeManager
         // Call FeeManager.withdrawEarnings(gameId) to withdraw
+    }
+
+    /**
+     * @notice Get all match IDs
+     * @return Array of all match IDs
+     */
+    function getAllMatches() external view returns (bytes32[] memory) {
+        return allMatchIds;
+    }
+
+    /**
+     * @notice Get recent matches (most recent first)
+     * @param limit Maximum number of matches to return
+     * @return Array of recent RPSMatch structs
+     */
+    function getRecentMatches(uint256 limit) external view returns (RPSMatch[] memory) {
+        uint256 count = allMatchIds.length;
+        if (limit > count) limit = count;
+        if (limit == 0) return new RPSMatch[](0);
+
+        RPSMatch[] memory recent = new RPSMatch[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            recent[i] = matches[allMatchIds[count - 1 - i]];
+        }
+
+        return recent;
+    }
+
+    /**
+     * @notice Get all match IDs for a specific player
+     * @param player The player address
+     * @return Array of matchIds where player participated
+     */
+    function getPlayerMatches(address player) external view returns (bytes32[] memory) {
+        return playerMatchIds[player];
+    }
+
+    /**
+     * @notice Get match details with gameId context
+     * @param _gameId The game identifier (for validation)
+     * @param matchId The match identifier
+     * @return RPSMatch details
+     */
+    function getGameMatch(bytes32 _gameId, bytes32 matchId) external view returns (RPSMatch memory) {
+        require(_gameId == gameId, "Invalid game ID");
+        return matches[matchId];
+    }
+
+    /**
+     * @notice Get game statistics
+     * @return totalMatches Total matches scheduled
+     * @return completedMatches Number of completed matches
+     * @return activeMatches Number of active (not completed) matches
+     */
+    function getGameStats()
+        external
+        view
+        returns (
+            uint256 totalMatches,
+            uint256 completedMatches,
+            uint256 activeMatches
+        )
+    {
+        totalMatches = allMatchIds.length;
+
+        for (uint256 i = 0; i < allMatchIds.length; i++) {
+            if (matches[allMatchIds[i]].status == MatchStatus.COMPLETED) {
+                completedMatches++;
+            } else {
+                activeMatches++;
+            }
+        }
+    }
+
+    /**
+     * @notice Batch get matches
+     * @param matchIds Array of match identifiers
+     * @return Array of RPSMatch structs
+     */
+    function getMatchesBatch(bytes32[] calldata matchIds) external view returns (RPSMatch[] memory) {
+        RPSMatch[] memory result = new RPSMatch[](matchIds.length);
+        for (uint256 i = 0; i < matchIds.length; i++) {
+            result[i] = matches[matchIds[i]];
+        }
+        return result;
     }
 
     // ============ Internal Functions ============

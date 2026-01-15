@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react"
 import { useAccount, useReadContract, useReadContracts } from "wagmi"
 import { formatEther, type Address } from "viem"
+import { useRouter } from "next/navigation"
 import { SideNav } from "@/components/side-nav"
 import { AnimatedNoise } from "@/components/animated-noise"
 import { HighlightText } from "@/components/highlight-text"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrambleTextOnHover } from "@/components/scramble-text"
+import { WalletWidget } from "@/components/wallet-widget"
 import {
   GameRegistryContract,
   FeeManagerV2Contract,
@@ -16,48 +18,24 @@ import {
   type GameData,
   type DeveloperEarnings,
 } from "@/lib/contracts"
+import { useDeveloperStats, useDeveloperGames } from "@/lib/hooks/useGameRegistry"
+import { useGlobalStats, useGameStats } from "@/lib/hooks/useOracleCore"
+import { useDeveloperEarnings } from "@/lib/hooks/useFeeManager"
 
 export default function GameProviderDashboard() {
   const { address, isConnected } = useAccount()
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "all">("30d")
 
-  // Fetch developer's games
-  const { data: gameIds } = useReadContract({
-    ...GameRegistryContract,
-    functionName: "getDeveloperGames",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address,
-    },
-  })
-
-  // Fetch Oracle stats
-  const { data: oracleStats } = useReadContracts({
-    contracts: [
-      {
-        ...OracleCoreContract,
-        functionName: "totalResults",
-      },
-      {
-        ...OracleCoreContract,
-        functionName: "totalFinalized",
-      },
-      {
-        ...OracleCoreContract,
-        functionName: "totalDisputed",
-      },
-    ],
-  })
-
-  // Calculate totals from all games
-  const [totalEarnings, setTotalEarnings] = useState<bigint>(0n)
-  const [totalPending, setTotalPending] = useState<bigint>(0n)
-  const [totalQueries, setTotalQueries] = useState<number>(0)
+  // Use new hooks for better data fetching
+  const { data: gameIds } = useDeveloperGames(address)
+  const { data: devStats } = useDeveloperStats(address)
+  const { data: globalOracleStats } = useGlobalStats()
 
   if (!isConnected) {
     return (
       <main className="relative min-h-screen pl-6 md:pl-28 pr-6 md:pr-12 py-12">
         <SideNav />
+        <WalletWidget />
         <div className="grid-bg fixed inset-0 opacity-30" aria-hidden="true" />
         <AnimatedNoise opacity={0.02} />
 
@@ -77,15 +55,22 @@ export default function GameProviderDashboard() {
       </main>
     )
   }
-
+  // Extract stats from hooks
+  console.log(gameIds)
   const gameCount = (gameIds as any)?.length || 0
-  const totalResultsCount = oracleStats?.[0]?.result ? Number(oracleStats[0].result) : 0
-  const totalFinalizedCount = oracleStats?.[1]?.result ? Number(oracleStats[1].result) : 0
-  const totalDisputedCount = oracleStats?.[2]?.result ? Number(oracleStats[2].result) : 0
+  const totalGames = devStats ? Number(devStats[0]) : 0
+  const totalMatches = devStats ? Number(devStats[1]) : 0
+  const totalDisputes = devStats ? Number(devStats[2]) : 0
+  const avgReputation = devStats ? Number(devStats[3]) : 0
+
+  const totalResultsCount = globalOracleStats ? Number(globalOracleStats[0]) : 0
+  const totalFinalizedCount = globalOracleStats ? Number(globalOracleStats[1]) : 0
+  const totalDisputedCount = globalOracleStats ? Number(globalOracleStats[2]) : 0
 
   return (
     <main className="relative min-h-screen pl-6 md:pl-28 pr-6 md:pr-12 py-12">
       <SideNav />
+      <WalletWidget />
       <div className="grid-bg fixed inset-0 opacity-30" aria-hidden="true" />
       <AnimatedNoise opacity={0.02} />
 
@@ -129,32 +114,34 @@ export default function GameProviderDashboard() {
 
           <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
             <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">
-              Total Queries
+              Total Matches
             </div>
             <div className="font-[var(--font-bebas)] text-4xl text-accent">
-              {totalQueries.toLocaleString()}
+              {totalMatches.toLocaleString()}
             </div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">All time</div>
+            <div className="font-mono text-xs text-muted-foreground mt-2">Across all games</div>
           </Card>
 
           <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
             <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">
-              Total Earned
+              Total Disputes
             </div>
             <div className="font-[var(--font-bebas)] text-4xl text-accent">
-              {parseFloat(formatEther(totalEarnings)).toFixed(4)} BNB
+              {totalDisputes.toLocaleString()}
             </div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">80% share</div>
+            <div className="font-mono text-xs text-muted-foreground mt-2">
+              {totalMatches > 0 ? `${((totalDisputes / totalMatches) * 100).toFixed(1)}%` : "0%"} dispute rate
+            </div>
           </Card>
 
           <Card className="p-6 border-border/30 bg-card/50 backdrop-blur-sm">
             <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">
-              Pending
+              Reputation
             </div>
             <div className="font-[var(--font-bebas)] text-4xl text-accent">
-              {parseFloat(formatEther(totalPending)).toFixed(4)} BNB
+              {avgReputation.toFixed(1)}%
             </div>
-            <div className="font-mono text-xs text-muted-foreground mt-2">Available to withdraw</div>
+            <div className="font-mono text-xs text-muted-foreground mt-2">Average across games</div>
           </Card>
         </div>
 
@@ -163,7 +150,7 @@ export default function GameProviderDashboard() {
           <div className="mb-12">
             <h2 className="font-mono text-lg font-medium text-foreground mb-6">My Registered Games</h2>
             <div className="border border-border/30 overflow-hidden">
-              <div className="grid grid-cols-7 gap-px bg-border/30">
+              <div className="grid grid-cols-8 gap-px bg-border/30">
                 <div className="bg-background p-4">
                   <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
                     Game Name
@@ -173,11 +160,16 @@ export default function GameProviderDashboard() {
                   <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Type</div>
                 </div>
                 <div className="bg-background p-4">
-                  <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Stake</div>
+                  <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground"> TStake</div>
                 </div>
                 <div className="bg-background p-4">
                   <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                    Queries
+                    Matches
+                  </div>
+                </div>
+                <div className="bg-background p-4">
+                  <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                    Results
                   </div>
                 </div>
                 <div className="bg-background p-4">
@@ -263,6 +255,8 @@ export default function GameProviderDashboard() {
 
 // Component to render individual game rows
 function GameRow({ gameId }: { gameId: `0x${string}` }) {
+  const router = useRouter()
+  console.log("Rendering GameRow for:", gameId)
   // Fetch game data
   const { data: gameData } = useReadContract({
     ...GameRegistryContract,
@@ -270,28 +264,44 @@ function GameRow({ gameId }: { gameId: `0x${string}` }) {
     args: [gameId],
   })
 
-  // Fetch earnings data
-  const { data: earningsData } = useReadContract({
-    ...FeeManagerV2Contract,
-    functionName: "developerEarnings",
+  // Fetch matches count
+  const { data: matches } = useReadContract({
+    ...GameRegistryContract,
+    functionName: "getGameMatches",
     args: [gameId],
   })
 
+  // Fetch game stats from OracleCore
+  const { data: oracleStats } = useGameStats(gameId)
+
+  // Fetch earnings data
+  const { data: earningsData } = useDeveloperEarnings(gameId)
+
   if (!gameData || !earningsData) {
+    console.log("Loading...", gameData, earningsData)
     return (
-      <div className="grid grid-cols-7 gap-px bg-border/30">
-        <div className="bg-background p-4 col-span-7">
+      <div className="grid grid-cols-8 gap-px bg-border/30">
+        <div className="bg-background p-4 col-span-8">
           <div className="font-mono text-sm text-muted-foreground">Loading...</div>
         </div>
       </div>
     )
+    
   }
+
+  console.log(gameData)
 
   const game = gameData as unknown as GameData
   const earnings = earningsData as unknown as DeveloperEarnings
+  const matchCount = (matches as any)?.length || 0
+
+  const totalResults = oracleStats ? Number(oracleStats[0]) : 0
+  const finalizedResults = oracleStats ? Number(oracleStats[1]) : 0
+  const disputedResults = oracleStats ? Number(oracleStats[2]) : 0
+  const finalizationRate = totalResults > 0 ? ((finalizedResults / totalResults) * 100).toFixed(0) : "0"
 
   return (
-    <div className="grid grid-cols-7 gap-px bg-border/30 hover:bg-accent/10 transition-colors duration-200">
+    <div className="grid grid-cols-8 gap-px bg-border/30 hover:bg-accent/10 transition-colors duration-200">
       <div className="bg-background p-4">
         <div className="font-mono text-sm text-foreground">{game.name || "Unnamed Game"}</div>
       </div>
@@ -302,15 +312,21 @@ function GameRow({ gameId }: { gameId: `0x${string}` }) {
       </div>
       <div className="bg-background p-4">
         <div className="font-mono text-sm text-muted-foreground">
-          {parseFloat(formatEther(game.stake)).toFixed(2)} BNB
+          {parseFloat(formatEther(game.stakedAmount || BigInt(0))).toFixed(2)} BNB
         </div>
       </div>
       <div className="bg-background p-4">
-        <div className="font-mono text-sm text-muted-foreground">{earnings.totalQueries}</div>
+        <div className="font-mono text-sm text-muted-foreground">{matchCount.toLocaleString()}</div>
+      </div>
+      <div className="bg-background p-4">
+        <div className="font-mono text-sm text-muted-foreground">
+          {totalResults.toLocaleString()}
+          <span className="text-xs ml-1 text-accent">({finalizationRate}%)</span>
+        </div>
       </div>
       <div className="bg-background p-4">
         <div className="font-mono text-sm text-accent font-medium">
-          {parseFloat(formatEther(earnings.totalEarned)).toFixed(4)} BNB
+          {parseFloat(formatEther(earnings[0])).toFixed(4)} BNB
         </div>
       </div>
       <div className="bg-background p-4">
@@ -319,7 +335,10 @@ function GameRow({ gameId }: { gameId: `0x${string}` }) {
         </div>
       </div>
       <div className="bg-background p-4">
-        <button className="font-mono text-xs uppercase tracking-widest text-foreground hover:text-accent transition-colors duration-200">
+        <button
+          onClick={() => router.push(`/console/game/${gameId}`)}
+          className="font-mono text-xs uppercase tracking-widest text-foreground hover:text-accent transition-colors duration-200"
+        >
           View
         </button>
       </div>

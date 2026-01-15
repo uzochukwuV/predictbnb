@@ -54,7 +54,9 @@ contract MockChessGame {
 
         gameId = gameRegistry.registerGame{value: msg.value}(
             "OnChain Chess",
-            '{"genre": "Board Game", "website": "https://chess.example.com", "maxPlayers": 2}'
+            '{"genre": "Board Game", "website": "https://chess.example.com", "maxPlayers": 2}',
+            msg.sender, // Pass owner as the developer
+            address(this) // This contract as game contract
         );
     }
 
