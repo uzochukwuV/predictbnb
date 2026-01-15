@@ -29,6 +29,8 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { useContractsDeployed } from "@/lib/hooks/useContractData"
+import { DEMO_MARKETS, type Market } from "@/lib/data/demo-data"
 import {
   TrendingUp,
   TrendingDown,
@@ -48,81 +50,19 @@ import {
   Zap,
   Timer,
   Award,
+  AlertTriangle,
 } from "lucide-react"
-
-interface Market {
-  id: string
-  title: string
-  game: string
-  matchId: string
-  totalPool: string
-  optionA: { label: string; pool: string; odds: number }
-  optionB: { label: string; pool: string; odds: number }
-  status: "active" | "resolved" | "pending" | "disputed"
-  endsAt: string
-  participants: number
-  winner?: string
-}
 
 export default function MarketsPage() {
   const { address, isConnected } = useAccount()
+  const deployed = useContractsDeployed()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [betAmount, setBetAmount] = useState("")
   const [selectedOption, setSelectedOption] = useState<"A" | "B" | null>(null)
 
-  // Demo markets data
-  const markets: Market[] = [
-    {
-      id: "1",
-      title: "Virtual Football: Team Alpha vs Team Beta",
-      game: "Virtual Football League",
-      matchId: "0xabc123",
-      totalPool: "12.5",
-      optionA: { label: "Team Alpha Wins", pool: "7.5", odds: 1.67 },
-      optionB: { label: "Team Beta Wins", pool: "5.0", odds: 2.5 },
-      status: "active",
-      endsAt: "2h 30m",
-      participants: 156,
-    },
-    {
-      id: "2",
-      title: "RPS Tournament Final",
-      game: "RPS Championship",
-      matchId: "0xdef456",
-      totalPool: "8.2",
-      optionA: { label: "Player X", pool: "4.1", odds: 2.0 },
-      optionB: { label: "Player Y", pool: "4.1", odds: 2.0 },
-      status: "active",
-      endsAt: "45m",
-      participants: 89,
-    },
-    {
-      id: "3",
-      title: "CS2 Semi-Final Match",
-      game: "CS2 Pro League",
-      matchId: "0xghi789",
-      totalPool: "25.0",
-      optionA: { label: "Ninjas", pool: "18.0", odds: 1.39 },
-      optionB: { label: "Vikings", pool: "7.0", odds: 3.57 },
-      status: "resolved",
-      endsAt: "Ended",
-      participants: 312,
-      winner: "Ninjas",
-    },
-    {
-      id: "4",
-      title: "League of Legends Qualifier",
-      game: "LoL Esports",
-      matchId: "0xjkl012",
-      totalPool: "5.8",
-      optionA: { label: "Dragons", pool: "3.2", odds: 1.81 },
-      optionB: { label: "Phoenix", pool: "2.6", odds: 2.23 },
-      status: "pending",
-      endsAt: "Pending Result",
-      participants: 67,
-    },
-  ]
+  // Use demo markets data
+  const markets = DEMO_MARKETS
 
   const filteredMarkets = markets.filter((market) =>
     market.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -150,6 +90,22 @@ export default function MarketsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
+      {/* Demo Mode Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-4 border border-yellow-500/30 bg-yellow-500/5 flex items-center gap-3"
+      >
+        <AlertTriangle className="w-5 h-5 text-yellow-400" />
+        <div className="flex-1">
+          <span className="font-mono text-xs text-yellow-400 uppercase tracking-widest">Demo Mode</span>
+          <p className="font-mono text-xs text-muted-foreground mt-1">
+            Prediction markets use demonstration data. Deploy VirtualFootballMarket contract for live betting.
+          </p>
+        </div>
+        <Badge variant="warning">Demo Data</Badge>
+      </motion.div>
+
       {/* Page Header */}
       <PageHeader
         badge="Markets"
@@ -190,12 +146,17 @@ export default function MarketsPage() {
                   </label>
                   <Input placeholder="Who will win?" />
                 </div>
+                <div className="p-3 border border-yellow-500/30 bg-yellow-500/5">
+                  <span className="font-mono text-xs text-yellow-400">
+                    Contracts not deployed - market creation is disabled
+                  </span>
+                </div>
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 font-mono text-xs uppercase tracking-widest">
                   Cancel
                 </Button>
-                <Button className="flex-1 font-mono text-xs uppercase tracking-widest">
+                <Button disabled className="flex-1 font-mono text-xs uppercase tracking-widest">
                   <Zap className="w-4 h-4 mr-2" />
                   Create
                 </Button>
@@ -279,185 +240,12 @@ export default function MarketsPage() {
             <TabsContent value="all" className="space-y-4">
               <AnimatePresence>
                 {filteredMarkets.map((market, index) => (
-                  <motion.div
-                    key={market.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Sheet>
-                      <SheetTrigger asChild>
-                        <motion.div
-                          whileHover={{ x: 4 }}
-                          className="p-5 border border-border/30 hover:border-accent/50 transition-all cursor-pointer relative overflow-hidden"
-                        >
-                          {market.status === "active" && (
-                            <div className="absolute top-0 right-0 w-20 h-20">
-                              <FloatingOrb className="bg-accent" size={60} />
-                            </div>
-                          )}
-                          <div className="relative">
-                            {/* Header */}
-                            <div className="flex items-start justify-between mb-4">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge variant={getStatusColor(market.status) as any}>{market.status}</Badge>
-                                  <span className="font-mono text-[10px] text-muted-foreground">{market.game}</span>
-                                </div>
-                                <h3 className="font-mono text-sm text-foreground font-medium">{market.title}</h3>
-                              </div>
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Timer className="w-4 h-4" />
-                                <span className="font-mono text-xs">{market.endsAt}</span>
-                              </div>
-                            </div>
-
-                            {/* Options */}
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                              <div className={`p-3 border transition-colors ${
-                                market.winner === market.optionA.label 
-                                  ? "border-green-500/50 bg-green-500/10" 
-                                  : "border-border/30 hover:border-accent/30"
-                              }`}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-mono text-xs text-foreground">{market.optionA.label}</span>
-                                  {market.winner === market.optionA.label && (
-                                    <Award className="w-4 h-4 text-green-400" />
-                                  )}
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="font-[var(--font-bebas)] text-lg text-accent">{market.optionA.odds}x</span>
-                                  <span className="font-mono text-[10px] text-muted-foreground">{market.optionA.pool} BNB</span>
-                                </div>
-                              </div>
-                              <div className={`p-3 border transition-colors ${
-                                market.winner === market.optionB.label 
-                                  ? "border-green-500/50 bg-green-500/10" 
-                                  : "border-border/30 hover:border-accent/30"
-                              }`}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-mono text-xs text-foreground">{market.optionB.label}</span>
-                                  {market.winner === market.optionB.label && (
-                                    <Award className="w-4 h-4 text-green-400" />
-                                  )}
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="font-[var(--font-bebas)] text-lg text-accent">{market.optionB.odds}x</span>
-                                  <span className="font-mono text-[10px] text-muted-foreground">{market.optionB.pool} BNB</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                <span className="font-mono text-[10px] text-muted-foreground">
-                                  <Users className="w-3 h-3 inline mr-1" />
-                                  {market.participants} participants
-                                </span>
-                                <span className="font-mono text-[10px] text-accent">
-                                  Pool: {market.totalPool} BNB
-                                </span>
-                              </div>
-                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          </div>
-                        </motion.div>
-                      </SheetTrigger>
-                      <SheetContent side="right" className="w-[400px] sm:w-[540px]">
-                        <SheetHeader>
-                          <SheetTitle className="font-[var(--font-bebas)] text-2xl">{market.title}</SheetTitle>
-                          <SheetDescription className="font-mono text-xs">{market.game} • {market.matchId}</SheetDescription>
-                        </SheetHeader>
-                        <div className="mt-6 space-y-6">
-                          {/* Market Stats */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <MiniStatCard title="Total Pool" value={market.totalPool} suffix=" BNB" />
-                            <MiniStatCard title="Participants" value={market.participants} />
-                          </div>
-
-                          {/* Place Bet */}
-                          {market.status === "active" && (
-                            <div className="p-4 border border-accent/30 bg-accent/5">
-                              <div className="font-mono text-xs text-accent mb-4">Place Your Prediction</div>
-                              <div className="grid grid-cols-2 gap-3 mb-4">
-                                <Button
-                                  variant={selectedOption === "A" ? "default" : "outline"}
-                                  onClick={() => setSelectedOption("A")}
-                                  className="font-mono text-xs flex-col h-auto py-3"
-                                >
-                                  <span>{market.optionA.label}</span>
-                                  <span className="text-accent text-lg font-bold">{market.optionA.odds}x</span>
-                                </Button>
-                                <Button
-                                  variant={selectedOption === "B" ? "default" : "outline"}
-                                  onClick={() => setSelectedOption("B")}
-                                  className="font-mono text-xs flex-col h-auto py-3"
-                                >
-                                  <span>{market.optionB.label}</span>
-                                  <span className="text-accent text-lg font-bold">{market.optionB.odds}x</span>
-                                </Button>
-                              </div>
-                              <div className="flex gap-3">
-                                <Input
-                                  type="number"
-                                  placeholder="Amount in BNB"
-                                  value={betAmount}
-                                  onChange={(e) => setBetAmount(e.target.value)}
-                                />
-                                <Button disabled={!selectedOption || !betAmount} className="font-mono text-xs uppercase">
-                                  Place Bet
-                                </Button>
-                              </div>
-                              {selectedOption && betAmount && (
-                                <div className="mt-3 p-2 border border-border/30">
-                                  <div className="font-mono text-[10px] text-muted-foreground">Potential Payout</div>
-                                  <div className="font-[var(--font-bebas)] text-xl text-accent">
-                                    {(parseFloat(betAmount) * (selectedOption === "A" ? market.optionA.odds : market.optionB.odds)).toFixed(4)} BNB
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Pool Distribution */}
-                          <div>
-                            <div className="font-mono text-xs text-muted-foreground mb-3">Pool Distribution</div>
-                            <ProgressBar
-                              value={parseFloat(market.optionA.pool)}
-                              max={parseFloat(market.totalPool)}
-                              label={`${market.optionA.label}: ${((parseFloat(market.optionA.pool) / parseFloat(market.totalPool)) * 100).toFixed(1)}%`}
-                              showLabel
-                            />
-                          </div>
-
-                          {/* Match Info */}
-                          <div className="p-4 border border-border/30">
-                            <div className="font-mono text-xs text-muted-foreground mb-2">Oracle Status</div>
-                            <div className="flex items-center gap-2">
-                              {market.status === "resolved" ? (
-                                <>
-                                  <CheckCircle2 className="w-4 h-4 text-green-400" />
-                                  <span className="font-mono text-xs text-green-400">Result Verified</span>
-                                </>
-                              ) : market.status === "pending" ? (
-                                <>
-                                  <Clock className="w-4 h-4 text-yellow-400" />
-                                  <span className="font-mono text-xs text-yellow-400">Awaiting Result</span>
-                                </>
-                              ) : (
-                                <>
-                                  <PulsingDot />
-                                  <span className="font-mono text-xs text-accent">Live</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </SheetContent>
-                    </Sheet>
-                  </motion.div>
+                  <MarketCard 
+                    key={market.id} 
+                    market={market} 
+                    index={index}
+                    getStatusColor={getStatusColor}
+                  />
                 ))}
               </AnimatePresence>
             </TabsContent>
@@ -465,11 +253,13 @@ export default function MarketsPage() {
             <TabsContent value="active">
               {filteredMarkets.filter(m => m.status === "active").length > 0 ? (
                 <div className="space-y-4">
-                  {filteredMarkets.filter(m => m.status === "active").map((market) => (
-                    <div key={market.id} className="p-4 border border-border/30">
-                      <h3 className="font-mono text-sm text-foreground">{market.title}</h3>
-                      <p className="font-mono text-xs text-muted-foreground mt-1">{market.game}</p>
-                    </div>
+                  {filteredMarkets.filter(m => m.status === "active").map((market, index) => (
+                    <MarketCard 
+                      key={market.id} 
+                      market={market} 
+                      index={index}
+                      getStatusColor={getStatusColor}
+                    />
                   ))}
                 </div>
               ) : (
@@ -480,15 +270,13 @@ export default function MarketsPage() {
             <TabsContent value="resolved">
               {filteredMarkets.filter(m => m.status === "resolved").length > 0 ? (
                 <div className="space-y-4">
-                  {filteredMarkets.filter(m => m.status === "resolved").map((market) => (
-                    <div key={market.id} className="p-4 border border-green-500/30 bg-green-500/5">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-400" />
-                        <Badge variant="success">Resolved</Badge>
-                      </div>
-                      <h3 className="font-mono text-sm text-foreground">{market.title}</h3>
-                      <p className="font-mono text-xs text-muted-foreground mt-1">Winner: {market.winner}</p>
-                    </div>
+                  {filteredMarkets.filter(m => m.status === "resolved").map((market, index) => (
+                    <MarketCard 
+                      key={market.id} 
+                      market={market} 
+                      index={index}
+                      getStatusColor={getStatusColor}
+                    />
                   ))}
                 </div>
               ) : (
@@ -512,5 +300,206 @@ export default function MarketsPage() {
         </Card>
       </ScrollReveal>
     </div>
+  )
+}
+
+// Market Card Component
+function MarketCard({ 
+  market, 
+  index, 
+  getStatusColor 
+}: { 
+  market: Market
+  index: number
+  getStatusColor: (status: Market["status"]) => string
+}) {
+  const [betAmount, setBetAmount] = useState("")
+  const [selectedOption, setSelectedOption] = useState<"A" | "B" | null>(null)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ delay: index * 0.05 }}
+    >
+      <Sheet>
+        <SheetTrigger asChild>
+          <motion.div
+            whileHover={{ x: 4 }}
+            className="p-5 border border-border/30 hover:border-accent/50 transition-all cursor-pointer relative overflow-hidden"
+          >
+            {market.status === "active" && (
+              <div className="absolute top-0 right-0 w-20 h-20">
+                <FloatingOrb className="bg-accent" size={60} />
+              </div>
+            )}
+            <div className="relative">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant={getStatusColor(market.status) as any}>{market.status}</Badge>
+                    <span className="font-mono text-[10px] text-muted-foreground">{market.game}</span>
+                    {!market.isLive && <Badge variant="warning">Demo</Badge>}
+                  </div>
+                  <h3 className="font-mono text-sm text-foreground font-medium">{market.title}</h3>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Timer className="w-4 h-4" />
+                  <span className="font-mono text-xs">{market.endsAt}</span>
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className={`p-3 border transition-colors ${
+                  market.winner === market.optionA.label 
+                    ? "border-green-500/50 bg-green-500/10" 
+                    : "border-border/30 hover:border-accent/30"
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-xs text-foreground">{market.optionA.label}</span>
+                    {market.winner === market.optionA.label && (
+                      <Award className="w-4 h-4 text-green-400" />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-[var(--font-bebas)] text-lg text-accent">{market.optionA.odds}x</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{market.optionA.pool} BNB</span>
+                  </div>
+                </div>
+                <div className={`p-3 border transition-colors ${
+                  market.winner === market.optionB.label 
+                    ? "border-green-500/50 bg-green-500/10" 
+                    : "border-border/30 hover:border-accent/30"
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-xs text-foreground">{market.optionB.label}</span>
+                    {market.winner === market.optionB.label && (
+                      <Award className="w-4 h-4 text-green-400" />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-[var(--font-bebas)] text-lg text-accent">{market.optionB.odds}x</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{market.optionB.pool} BNB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    <Users className="w-3 h-3 inline mr-1" />
+                    {market.participants} participants
+                  </span>
+                  <span className="font-mono text-[10px] text-accent">
+                    Pool: {market.totalPool} BNB
+                  </span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </div>
+          </motion.div>
+        </SheetTrigger>
+        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
+          <SheetHeader>
+            <SheetTitle className="font-[var(--font-bebas)] text-2xl">{market.title}</SheetTitle>
+            <SheetDescription className="font-mono text-xs">{market.game} • {market.matchId}</SheetDescription>
+          </SheetHeader>
+          <div className="mt-6 space-y-6">
+            {/* Market Stats */}
+            <div className="grid grid-cols-2 gap-4">
+              <MiniStatCard title="Total Pool" value={market.totalPool} suffix=" BNB" />
+              <MiniStatCard title="Participants" value={market.participants} />
+            </div>
+
+            {/* Place Bet */}
+            {market.status === "active" && (
+              <div className="p-4 border border-accent/30 bg-accent/5">
+                <div className="font-mono text-xs text-accent mb-4">Place Your Prediction</div>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <Button
+                    variant={selectedOption === "A" ? "default" : "outline"}
+                    onClick={() => setSelectedOption("A")}
+                    className="font-mono text-xs flex-col h-auto py-3"
+                  >
+                    <span>{market.optionA.label}</span>
+                    <span className="text-accent text-lg font-bold">{market.optionA.odds}x</span>
+                  </Button>
+                  <Button
+                    variant={selectedOption === "B" ? "default" : "outline"}
+                    onClick={() => setSelectedOption("B")}
+                    className="font-mono text-xs flex-col h-auto py-3"
+                  >
+                    <span>{market.optionB.label}</span>
+                    <span className="text-accent text-lg font-bold">{market.optionB.odds}x</span>
+                  </Button>
+                </div>
+                <div className="flex gap-3">
+                  <Input
+                    type="number"
+                    placeholder="Amount in BNB"
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(e.target.value)}
+                  />
+                  <Button disabled={!selectedOption || !betAmount} className="font-mono text-xs uppercase">
+                    Place Bet
+                  </Button>
+                </div>
+                {selectedOption && betAmount && (
+                  <div className="mt-3 p-2 border border-border/30">
+                    <div className="font-mono text-[10px] text-muted-foreground">Potential Payout</div>
+                    <div className="font-[var(--font-bebas)] text-xl text-accent">
+                      {(parseFloat(betAmount) * (selectedOption === "A" ? market.optionA.odds : market.optionB.odds)).toFixed(4)} BNB
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 p-2 border border-yellow-500/30 bg-yellow-500/5">
+                  <span className="font-mono text-[10px] text-yellow-400">
+                    Demo mode - betting is disabled
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Pool Distribution */}
+            <div>
+              <div className="font-mono text-xs text-muted-foreground mb-3">Pool Distribution</div>
+              <ProgressBar
+                value={parseFloat(market.optionA.pool)}
+                max={parseFloat(market.totalPool)}
+                label={`${market.optionA.label}: ${((parseFloat(market.optionA.pool) / parseFloat(market.totalPool)) * 100).toFixed(1)}%`}
+                showLabel
+              />
+            </div>
+
+            {/* Match Info */}
+            <div className="p-4 border border-border/30">
+              <div className="font-mono text-xs text-muted-foreground mb-2">Oracle Status</div>
+              <div className="flex items-center gap-2">
+                {market.status === "resolved" ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                    <span className="font-mono text-xs text-green-400">Result Verified</span>
+                  </>
+                ) : market.status === "pending" ? (
+                  <>
+                    <Clock className="w-4 h-4 text-yellow-400" />
+                    <span className="font-mono text-xs text-yellow-400">Awaiting Result</span>
+                  </>
+                ) : (
+                  <>
+                    <PulsingDot />
+                    <span className="font-mono text-xs text-accent">Live</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </motion.div>
   )
 }
